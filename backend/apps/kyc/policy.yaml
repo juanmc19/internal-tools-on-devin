@@ -1,0 +1,38 @@
+# KYC Review Queue: roles, permissions, row scope, masking and separation of duties.
+# The foundation enforces this file; the app code only names permissions and steps.
+app: kyc
+name: KYC Review Queue
+permissions:
+  - case.read
+  - case.read_unmasked
+  - case.claim
+  - case.recommend
+  - case.decide
+  - audit.read
+masking:
+  profiles:
+    standard:
+      applicant_name: initials
+      id_number: last4
+      address: city_only
+      date_of_birth: day_only
+roles:
+  analyst:
+    label: Analyst
+    permissions: [case.read, case.claim, case.recommend]
+    scope: { field: country, attribute: countries }
+    masking: standard
+  senior_reviewer:
+    label: Senior reviewer
+    permissions: [case.read, case.read_unmasked, case.claim, case.recommend, case.decide, audit.read]
+    scope: all
+    masking: none
+  auditor:
+    label: Auditor
+    permissions: [case.read, audit.read]
+    scope: all
+    masking: standard
+approvals:
+  decide:
+    # whoever recommended a case cannot decide it
+    distinct_from: [recommender_id]
