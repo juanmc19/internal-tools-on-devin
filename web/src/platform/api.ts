@@ -25,6 +25,11 @@ export class ApiError extends Error {
 
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number }
 
+/** Adds the next page's items to the ones already loaded (for "Load more" lists such as a record's history). */
+export function appendPage<T>(loaded: Page<T>, next: Page<T>): Page<T> {
+  return { ...next, items: [...loaded.items, ...next.items] }
+}
+
 export type RoleInfo = {
   app: string
   app_name: string

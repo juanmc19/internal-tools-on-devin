@@ -23,6 +23,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from backend.platform.db import Base
+from backend.platform.paging import PageParams, paginate
 
 if TYPE_CHECKING:
     from backend.platform.auth import User
@@ -295,6 +296,7 @@ def entries_for_record(app: str, record_type: str, record_id: str) -> Select:
 
 # Fields a record's workflow timeline leaves out for roles without audit.read.
 OVERSIGHT_FIELDS = ("request_id", "prev_hash", "hash")
+HISTORY_SORT = {"id": AuditEntry.id}
 
 
 def record_history(
@@ -305,20 +307,24 @@ def record_history(
     record_type: str,
     record_id: str,
     workflow_actions: Collection[str],
+    params: PageParams = PageParams(),
 ) -> dict[str, Any]:
-    """A record's audit entries for its history timeline.
+    """One page of a record's audit entries for its history timeline, oldest first, with the exact total.
 
     Roles with audit.read get the full rows. Every other role gets only the record's workflow steps
     (`workflow_actions`), so refusals, unmasked reads and other oversight entries stay out, and each entry
     drops the request id and hash-chain values.
     """
-    stmt = entries_for_record(policy.app, record_type, record_id).order_by(AuditEntry.id)
-    if policy.has(user, "audit.read"):
-        rows = session.scalars(stmt).all()
-        return {"items": [row.to_dict() for row in rows], "total": len(rows)}
-    rows = session.scalars(stmt.where(AuditEntry.action.in_(list(workflow_actions)))).all()
-    items = [{k: v for k, v in row.to_dict().items() if k not in OVERSIGHT_FIELDS} for row in rows]
-    return {"items": items, "total": len(items)}
+    stmt = entries_for_record(policy.app, record_type, record_id)
+    full = policy.has(user, "audit.read")
+    if not full:
+        stmt = stmt.where(AuditEntry.action.in_(list(workflow_actions)))
+    page = paginate(
+        session, stmt, params, sort_columns=HISTORY_SORT, default_sort="id", tiebreaker=AuditEntry.id
+    )
+    if full:
+        return page.to_dict(lambda row: row.to_dict())
+    return page.to_dict(lambda row: {k: v for k, v in row.to_dict().items() if k not in OVERSIGHT_FIELDS})
 
 
 def verify(session: Session) -> dict[str, Any]:
