@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import { KycApp } from "./kyc/KycApp";
+import { RefundsApp } from "./refunds/RefundsApp";
 
 /** Apps register here (outside the foundation) so the shell, routes and Home stay app-agnostic. */
 export type AppDefinition = {
@@ -12,4 +13,5 @@ export type AppDefinition = {
 
 export const APPS: AppDefinition[] = [
   { key: "kyc", name: "KYC", path: "/kyc", component: KycApp },
+  { key: "refunds", name: "Refunds", path: "/refunds", component: RefundsApp },
 ];

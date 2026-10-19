@@ -1,0 +1,46 @@
+# Refunds Desk: roles, permissions, row scope, masking and approval rules.
+# The foundation enforces this file; the app code only names permissions and steps.
+app: refunds
+name: Refunds Desk
+permissions:
+  - refund.read
+  - refund.request
+  - refund.approve
+  - refund.reject
+  - refund.pay
+  - audit.read
+masking:
+  profiles:
+    standard:
+      customer_name: initials
+roles:
+  agent:
+    label: Agent
+    permissions: [refund.read, refund.request]
+    scope: { field: region, attribute: regions }
+    masking: standard
+  approver:
+    label: Approver
+    permissions: [refund.read, refund.request, refund.approve, refund.reject, audit.read]
+    scope: all
+    masking: none
+  finance:
+    label: Finance
+    permissions: [refund.read, refund.pay]
+    scope: all
+    masking: none
+  auditor:
+    label: Auditor
+    permissions: [refund.read, audit.read]
+    scope: all
+    masking: standard
+approvals:
+  approve:
+    # the requester cannot approve their own refund; nobody approves the same refund twice
+    distinct_from: [requester_id, approvals.approver_id]
+    count:
+      default: 1
+      rules:
+        # above $5,000: two approvals from two different approvers
+        - when: { field: amount_cents, gt: 500000 }
+          then: 2
