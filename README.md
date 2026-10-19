@@ -39,7 +39,7 @@ The brief leaves these open. They shape the recommendation and should be checked
 5. **License savings come only when whole user groups leave.** Premium is billed per user, so a seat goes away
    only when its user no longer needs any Power App.
 6. **The 10 planned apps are not named in the brief.** The recommendation routes each one through the same
-   three gates (build, buy, keep) instead of guessing what they are.
+   rule (build with Devin, or keep on Power Apps) instead of guessing what they are.
 7. **Loaded engineer cost of about $200K a year**, used only to reason about review time.
 8. **Prototype limits.** Synthetic data, mocked sign-in, SQLite, no deployment pipeline.
 
