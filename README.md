@@ -1,114 +1,107 @@
-# internal-tools-on-devin
+# Internal tools on Devin
 
-A prototype for a build-vs-buy question: can a Series C fintech with about 60 engineers build its internal
-tools with Devin instead of Microsoft Power Apps? It contains two apps on one shared foundation, both built by
-Devin in recorded sessions:
+A working prototype of two internal tools for a regulated fintech, built by Devin on one shared foundation: a
+**KYC Review Queue** and a **Refunds Desk**. Every control (who can see what, who can approve what, and what gets
+recorded) is enforced by the API from a single policy file per app, so a new app inherits all of it without writing
+new security code.
 
-- **KYC Review Queue:** analysts claim and recommend cases, senior reviewers decide.
-- **Refunds Desk:** agents request refunds, approvers approve them, two approvers above $5,000.
+## What it does
 
-Both apps get sign-in, roles, row-level access, masking, separation of duties and a tamper-evident audit log from
-the foundation. What each claim rests on is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md); what each session
-cost is in [docs/RECEIPTS.md](docs/RECEIPTS.md).
+### Home
+
+Lists every app on the foundation with its owning team, record count and audit chain status. A persona menu in
+the top bar (marked DEV ONLY) switches between demo users and stands in for real sign-in.
+
+### KYC Review Queue
+
+Customer onboarding cases (50,000 across six Latin American countries) move from **New → In review → Recommended →
+Approved or Rejected**.
+
+| Role | Can do |
+|---|---|
+| Analyst | Claim and recommend cases in their assigned countries |
+| Senior reviewer | Claim, recommend and decide any case; sees full applicant details |
+| Auditor | Read cases and the audit log |
+
+| Policy | How it works |
+|---|---|
+| Row-level access | Analysts only receive cases from their countries. Other cases return "not found" and are left out of counts. |
+| Masking | Analysts and auditors see initials, the last 4 digits of the ID, the city and the day of birth. Every unmasked read by a senior reviewer is logged. |
+| Four-eyes rule | Whoever recommends a case cannot decide it. The API refuses with `SOD_VIOLATION`, and the attempt is logged. |
+| Server-side paging | Filters, search and totals run on the server across every case, so nothing is silently cut off. |
+| Audit log | Claims, recommendations, decisions, unmasked reads and refusals are recorded and viewable by senior reviewers and auditors. |
+
+### Refunds Desk
+
+Card refunds (20,000 across four US regions, either goodwill or a customer dispute) move from **Requested →
+Approved → Paid**, passing through **Pending second approval** when they're above $5,000, or are rejected.
+
+| Role | Can do |
+|---|---|
+| Agent | Request refunds in their regions |
+| Approver | Request, approve or reject any refund |
+| Finance | Mark approved refunds as paid |
+| Auditor | Read refunds and the audit log |
+
+| Policy | How it works |
+|---|---|
+| Two approvers above $5,000 | A large refund stays pending after the first approval and needs a second, different approver. |
+| Separation of duties | A requester can't approve their own refund, and an approver can't approve the same refund twice (`SOD_VIOLATION`). |
+| Row-level access | Agents only see and request refunds in their regions. |
+| Masking and card data | Agents and auditors see customer names as initials. Only the last 4 digits of a card are stored; a full card number is rejected. |
+| Reg E deadline | Disputes show the business days left in the 10-business-day Reg E investigation window (weekends and US federal holidays excluded). The queue sorts by urgency; overdue or due today shows in red, the next 2 days in amber. Goodwill refunds have no deadline. |
+| Audit log | Requests, approvals, rejections, payments and refusals are recorded and viewable by approvers and auditors. |
+
+### Shared foundation
+
+- Sign-in, roles, row-level access, masking, separation of duties and the audit log live once in
+  `backend/platform/` and `web/src/platform/`. Apps never edit it.
+- Each app declares its rules in `backend/apps/<app>/policy.yaml`, and the foundation enforces them.
+- The audit log is hash-chained, and database triggers block edits and deletes. **Verify chain** re-checks the
+  whole log and reports the first altered entry.
+- The Refunds Desk and the later Reg E change were both built without changing a line of the foundation; CI
+  reports this on every pull request.
+
+## Assumptions
+
+- **Regulated fintech.** KYC and Reg E obligations apply, which is why masking, the four-eyes rule, two-approver
+  refunds and a tamper-evident log are built in from the start.
+- **Microsoft shop.** In production, sign-in would use the existing Entra ID; here it's a mock persona menu.
+- **Synthetic data only.** All records are generated, and SQLite stands in for a production database.
+- **Business details are illustrative:** six onboarding countries, four refund regions and the $5,000
+  two-approver threshold.
 
 ## Run it
 
 Needs Python 3.12 (via [uv](https://docs.astral.sh/uv/)) and Node 20.
 
 ```sh
-make setup   # uv sync, npm ci, Playwright Chromium
-make seed    # reset backend/data/app.db in place and seed every registered app
-make run     # API on http://127.0.0.1:8000 (APP_ENV=dev turns on the mock sign-in)
-make web     # web on http://127.0.0.1:5173 (proxies /api to :8000)
+make setup   # install dependencies and the Playwright browser
+make seed    # reset the database and load the synthetic data
+make run     # API on http://127.0.0.1:8000
+make web     # web app on http://127.0.0.1:5173
 ```
 
-`make seed` can run while the API is up: it drops and recreates the tables in the existing file, so the running
-API serves the fresh data without a restart.
+Open http://127.0.0.1:5173 and pick a persona from the top-right menu:
 
-Then `make test` (pytest), `make lint` (ruff, eslint, tsc), `make e2e` (Playwright; starts both servers against
-a fresh seeded database), `make bench` (p95 for list, filter, search) and `make foundation-diff` (lines changed
-under `backend/platform/` and `web/src/platform/` against `main`).
+| Persona | App | Role |
+|---|---|---|
+| Ana Ruiz | KYC | Analyst (Mexico, Colombia) |
+| Bruno Lima | KYC | Analyst (Brazil, Argentina) |
+| Camila Torres, Diego Marín | KYC | Senior reviewers |
+| Gabriela Soto | Refunds | Agent (Northeast, Southeast) |
+| Hugo Pérez | Refunds | Agent (Midwest, West) |
+| Inés Castillo, Javier Ortiz | Refunds | Approvers |
+| Karla Núñez | Refunds | Finance |
+| Elena Vega | Both | Auditor |
 
-Sign-in is mocked: pick a persona in the top bar (marked DEV ONLY). The `X-Dev-User` header it sends is only
-honoured when `APP_ENV=dev`; every authenticated endpoint returns 401 otherwise. Personas are seeded by each app.
-
-### KYC seed data and audit history
-
-`make seed` creates 50,000 synthetic KYC cases (`TEST-KYC-000001` … `TEST-KYC-050000`) across MX, CO, BR, AR,
-CL and PE in about 3 seconds, plus five personas: Ana Ruiz (analyst, MX + CO), Bruno Lima (analyst, BR + AR),
-Camila Torres and Diego Marín (senior reviewers) and Elena Vega (auditor). The seed is deterministic.
-
-Audit history is seeded in two tiers so the demo shows real timelines without 150,000 synthetic entries:
-
-- **200 decided cases carry a full chained history**: `case.claim`, `case.recommend` and `case.decide` entries with
-  the actors and timestamps that match the case, hash-chained like every other entry.
-- **Every other case is covered by one `seed.import` audit entry per 1,000 cases** (50 entries), whose diff records
-  the range and count imported.
-
-Everything created after seeding (claims, recommendations, decisions, unmasked reads, refusals) is audited live,
-so `GET /audit/verify` covers the seed and the demo in one chain.
-
-### Refunds seed data and personas
-
-`make seed` also creates 20,000 synthetic refunds (`TEST-RFD-000001` … `TEST-RFD-020000`) across four US regions
-(northeast, southeast, midwest, west) in about 1.5 seconds: about a third are disputes, most amounts are under
-$1,000 and roughly 7% are above the $5,000 two-approver threshold. 300 paid refunds carry a full chained history
-(`refund.request`, one or two `refund.approve`, `refund.pay`); every other refund is covered by one `seed.import`
-entry per 1,000. Personas: Gabriela Soto (agent, northeast + southeast), Hugo Pérez (agent, midwest + west),
-Inés Castillo and Javier Ortiz (approvers), Karla Núñez (finance) and Elena Vega, who is the auditor in both
-Refunds and KYC. Agents see customer names as initials; the API stores only the last 4 digits of a card.
-Open refunds are dated relative to the day the seed runs, so the Reg E deadline column shows a realistic mix
-(a few overdue, some due within 2 business days, most with time left). The prototype tracks only the
-10-business-day Reg E deadline from the customer's report (weekends and US federal holidays excluded); it does not
-model the provisional-credit extension to 45 or 90 days or the customer's 60-day reporting window.
-
-Layout and conventions are in [AGENTS.md](AGENTS.md); the review checklist is [REVIEW.md](REVIEW.md).
-
-## Real vs mocked
-
-| Real | Mocked |
-|---|---|
-| Roles, row-level access, masking, separation of duties, audit log and their tests | Sign-in: a DEV ONLY persona switcher instead of Entra ID |
-| Server-side paging over 50,000 synthetic cases | All data is synthetic |
-| CI checks, including the foundation diff report | SQLite instead of Postgres |
-
-## Assumptions
-
-The brief leaves these open. They shape the recommendation and should be checked with the client.
-
-1. **Engineers build the apps; the rest of the company uses them.** The brief says the VP of Engineering is
-   asking whether "the team" can build them with Devin.
-2. **Microsoft shop.** The company already uses Entra ID and Microsoft 365, so Power Apps sign-in and
-   connectors come at no extra effort.
-3. **Regulated.** KYC/AML obligations apply, directly or through a sponsor bank, and SOX controls are coming
-   ahead of an IPO.
-4. **The $250K covers more than seats.** At $20 per user per month, $250K is about 1,040 Premium seats, more than
-   a company with ~60 engineers likely employs. The bill probably includes Dataverse capacity, Power Automate or
-   other Microsoft products. The first thing to ask for is the invoice by SKU and the renewal date.
-5. **License savings come only when whole user groups leave.** Premium is billed per user, so a seat goes away
-   only when its user no longer needs any Power App.
-6. **The 10 planned apps are not named in the brief.** The recommendation routes each one through the same
-   rule (build with Devin, or keep on Power Apps) instead of guessing what they are.
-7. **Loaded engineer cost of about $200K a year**, used only to reason about review time.
-8. **Prototype limits.** Synthetic data, mocked sign-in, SQLite, no deployment pipeline.
-
-## Sources
-
-- Delegation limits in canvas apps (500 rows by default, 10,000 at most):
-  [Microsoft Learn](https://learn.microsoft.com/en-us/power-apps/maker/canvas-apps/delegation-overview)
-- Dataverse auditing is turned on per environment, table and column, does not log reads, and admins can delete
-  logs: [Microsoft Learn](https://learn.microsoft.com/en-us/power-platform/admin/manage-dataverse-auditing)
-- Power Apps Premium rises from $20 to $22 per user per month on January 1, 2027:
-  [Microsoft licensing news, Sep 9, 2026](https://www.microsoft.com/en-us/licensing/news/power-apps-premium-price-update)
-- Power Apps Test Engine is deprecated in favor of Playwright samples:
-  [Microsoft Learn](https://learn.microsoft.com/en-sg/power-platform/test-engine),
-  [migration guide](https://learn.microsoft.com/power-platform/developer/playwright-samples/migration-guide)
-- 1,000+ Power Platform connectors:
-  [Microsoft Learn training](https://learn.microsoft.com/en-us/training/modules/identify-foundational-components-microsoft-power-platfor/5-examine-power-platform-connectors)
-- Reg E error resolution (10 business days to investigate):
-  [12 CFR 1005.11](https://www.consumerfinance.gov/rules-policy/regulations/1005/11/)
+`make seed` can run while the API is up. Other targets: `make test` (backend tests), `make e2e` (browser tests),
+`make lint`, `make bench` (query timings) and `make foundation-diff` (foundation lines changed against `main`).
 
 ## How it was built
 
-`AGENTS.md` and `REVIEW.md` are the conventions Devin followed. The prompt for each session is in
-[docs/devin-sessions](docs/devin-sessions). Every change went through a PR with CI and a review before merge.
+Built by Devin in three sessions, one prompt each: the foundation and KYC, then Refunds, then the Reg E change as
+an ops lead would request it. The prompts are in [docs/devin-sessions](docs/devin-sessions), and Devin followed
+[AGENTS.md](AGENTS.md) and [REVIEW.md](REVIEW.md). Every change went through a pull request with CI and was
+reviewed before merge. [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) maps each policy above to the test that proves it,
+and [docs/RECEIPTS.md](docs/RECEIPTS.md) records each session's cost and review findings.
