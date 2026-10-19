@@ -10,7 +10,7 @@ import { Separator } from "@/platform/ui/separator";
 import { Skeleton } from "@/platform/ui/skeleton";
 import { HistoryTimeline } from "@/platform/components/HistoryTimeline";
 import type { HistoryOptions } from "@/platform/components/diff";
-import type { AuditEntry } from "@/platform/api";
+import type { HistoryEntry } from "@/platform/api";
 
 export function RecordSheet({
   open,
@@ -33,7 +33,7 @@ export function RecordSheet({
   loading?: boolean;
   children: ReactNode;
   actions?: ReactNode;
-  history?: AuditEntry[];
+  history?: HistoryEntry[];
   historyLoading?: boolean;
   historyOptions?: HistoryOptions;
 }) {

@@ -141,3 +141,38 @@ def test_fnd3_concurrent_writers_keep_one_unbroken_chain(app):
     assert len({h for _, h in rows}) == len(rows)
     for (_, prev_hash), (next_prev, _) in zip(rows, rows[1:], strict=False):
         assert next_prev == prev_hash
+
+
+def test_record_history_trims_oversight_entries_for_roles_without_audit_read(app):
+    from backend.tests.testapp.app import POLICY
+
+    manager = User(id="manager_1", name="M", roles={"testapp": RoleAssignment("testapp", "manager")})
+    viewer = User(id="viewer_north", name="V", roles={"testapp": RoleAssignment("testapp", "viewer")})
+    ref = "TEST-WID-000001"
+    with app.state.db.session() as session:
+        for action, diff in [
+            ("widget.approve", {"status": {"from": "requested", "to": "approved"}}),
+            ("security.denied", {"code": "SOD_VIOLATION"}),
+            ("widget.read_unmasked", {"fields": ["owner_name"]}),
+        ]:
+            audit.write(
+                session,
+                app="testapp",
+                actor_id="manager_1",
+                action=action,
+                record_type="widget",
+                record_id=ref,
+                diff=diff,
+                request_id="req-1",
+            )
+        session.commit()
+        kwargs = {"record_type": "widget", "record_id": ref, "workflow_actions": ("widget.approve",)}
+        full = audit.record_history(session, POLICY, manager, **kwargs)
+        trimmed = audit.record_history(session, POLICY, viewer, **kwargs)
+    actions = [e["action"] for e in full["items"]]
+    assert actions == ["widget.approve", "security.denied", "widget.read_unmasked"]
+    assert full["items"][0]["request_id"] == "req-1" and full["items"][0]["hash"]
+    assert trimmed["total"] == 1 and [e["action"] for e in trimmed["items"]] == ["widget.approve"]
+    entry = trimmed["items"][0]
+    assert not {"request_id", "hash", "prev_hash"} & entry.keys()
+    assert entry["actor_id"] == "manager_1" and entry["diff"]["status"]["to"] == "approved"

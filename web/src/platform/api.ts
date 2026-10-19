@@ -68,6 +68,10 @@ export type AuditEntry = {
   hash: string
 }
 
+/** A record's history entry; roles without audit.read get these without the oversight fields. */
+export type HistoryEntry = Omit<AuditEntry, "request_id" | "prev_hash" | "hash"> &
+  Partial<Pick<AuditEntry, "request_id" | "prev_hash" | "hash">>
+
 export type VerifyResult = {
   ok: boolean
   entries: number

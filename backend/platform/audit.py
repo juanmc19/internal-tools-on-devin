@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Collection
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +21,9 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 from backend.platform.db import Base
 
 if TYPE_CHECKING:
+    from backend.platform.auth import User
     from backend.platform.db import Database
+    from backend.platform.policy import Policy
 
 GENESIS = "0" * 64
 
@@ -214,6 +217,34 @@ def entries_for_record(app: str, record_type: str, record_id: str) -> Select:
     return select(AuditEntry).where(
         AuditEntry.app == app, AuditEntry.record_type == record_type, AuditEntry.record_id == record_id
     )
+
+
+# Fields a record's workflow timeline leaves out for roles without audit.read.
+OVERSIGHT_FIELDS = ("request_id", "prev_hash", "hash")
+
+
+def record_history(
+    session: Session,
+    policy: Policy,
+    user: User,
+    *,
+    record_type: str,
+    record_id: str,
+    workflow_actions: Collection[str],
+) -> dict[str, Any]:
+    """A record's audit entries for its history timeline.
+
+    Roles with audit.read get the full rows. Every other role gets only the record's workflow steps
+    (`workflow_actions`), so refusals, unmasked reads and other oversight entries stay out, and each entry
+    drops the request id and hash-chain values.
+    """
+    stmt = entries_for_record(policy.app, record_type, record_id).order_by(AuditEntry.id)
+    if policy.has(user, "audit.read"):
+        rows = session.scalars(stmt).all()
+        return {"items": [row.to_dict() for row in rows], "total": len(rows)}
+    rows = session.scalars(stmt.where(AuditEntry.action.in_(list(workflow_actions)))).all()
+    items = [{k: v for k, v in row.to_dict().items() if k not in OVERSIGHT_FIELDS} for row in rows]
+    return {"items": items, "total": len(items)}
 
 
 def verify(session: Session) -> dict[str, Any]:
