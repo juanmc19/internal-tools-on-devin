@@ -2,7 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 /** REP-1 to REP-4 as the demo shows them: a $7,500 refund needs two different approvers, the same approver
  * is refused a second time, finance pays, the chain verifies; and an approver who requested a refund is
- * refused with SOD_VIOLATION when approving it. Runs against a seeded API; it creates its own refunds. */
+ * refused with SOD_VIOLATION when approving it. TLR-2: the queue sorted by Reg E deadline puts overdue
+ * disputes first, flagged in red. Runs against a seeded API; it creates its own refunds. */
 
 const GABRIELA = "TEST-USR-GABRIELA";
 const INES = "TEST-USR-INES";
@@ -190,4 +191,48 @@ test("approver who requested a refund is refused with SOD_VIOLATION on Approve (
   await expect(page.getByTestId("approvals-timeline")).toContainText(
     "1 of 1 · Javier Ortiz",
   );
+});
+
+test("queue sorted by Reg E deadline shows overdue disputes first, flagged; goodwill has none (TLR-2, TLR-3)", async ({
+  page,
+}) => {
+  await page.goto("/refunds");
+  await switchPersona(page, INES);
+  await expect(page.getByTestId("table-range")).toContainText(/1–50 of [\d,]+/);
+
+  // most urgent first: the open queue sorted by deadline starts with overdue disputes in red
+  const sorted = page.waitForResponse(
+    (r) =>
+      r.url().includes("/refunds?") && r.url().includes("sort=deadline_on"),
+  );
+  await page.getByRole("columnheader", { name: "Reg E deadline" }).click();
+  await sorted;
+  const header = page.getByRole("columnheader", { name: "Reg E deadline" });
+  await expect(header).toHaveAttribute("aria-sort", "ascending");
+  const rows = page.locator("tbody tr");
+  await expect(rows.first().getByTestId("deadline-overdue")).toContainText(
+    /Overdue · \d+ business days?/,
+  );
+  await expect(
+    rows.first().locator("[data-testid=deadline-overdue] span"),
+  ).toHaveClass(/text-red-700/);
+  await expect(page.getByTestId("deadline-overdue").first()).toBeVisible();
+
+  // the sheet shows the deadline date next to the flag
+  await rows.first().click();
+  await expect(page.getByTestId("field-deadline")).toContainText("Overdue");
+  await expect(page.getByTestId("field-deadline")).toContainText(
+    /\d{2} \w{3} \d{4}/,
+  );
+  await closeSheet(page);
+
+  // goodwill refunds have no deadline and sort after every dispute
+  const goodwill = page.waitForResponse(
+    (r) => r.url().includes("/refunds?") && r.url().includes("type=goodwill"),
+  );
+  await page.getByTestId("filter-type").click();
+  await page.getByRole("option", { name: "Goodwill", exact: true }).click();
+  await goodwill;
+  await expect(rows.first().getByTestId("deadline-none")).toHaveText("—");
+  await expect(page.getByTestId("deadline-overdue")).toHaveCount(0);
 });

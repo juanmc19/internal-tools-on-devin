@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.apps.kyc.app import MANIFEST as KYC
 from backend.apps.kyc.seed import PERSONAS as KYC_PERSONAS
+from backend.apps.refunds import business_days
 from backend.apps.refunds.app import MANIFEST
 from backend.apps.refunds.models import Refund, RefundApproval
 from backend.apps.refunds.seed import PERSONAS, seed
@@ -51,6 +52,7 @@ def small_seed(session) -> None:
             type=rtype,
             reason="Seeded for tests.",
             reported_on="2026-09-20" if rtype == "dispute" else None,
+            deadline_on=business_days.deadline_for("2026-09-20") if rtype == "dispute" else None,
             status=status,
             requester_id=requester,
             created_at=T0,
