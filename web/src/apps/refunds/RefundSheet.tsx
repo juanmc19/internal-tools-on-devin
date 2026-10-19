@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Check, Clock, Eye, EyeOff } from "lucide-react";
-import type { AuditEntry } from "@/platform/api";
+import type { HistoryEntry } from "@/platform/api";
 import { Button } from "@/platform/ui/button";
 import { Badge } from "@/platform/ui/badge";
 import {
@@ -44,7 +44,7 @@ export function RefundSheet({
 }) {
   const { me, can, nameOf, personaId } = usePersona();
   const [record, setRecord] = useState<Refund | null>(null);
-  const [history, setHistory] = useState<AuditEntry[]>();
+  const [history, setHistory] = useState<HistoryEntry[]>();
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);

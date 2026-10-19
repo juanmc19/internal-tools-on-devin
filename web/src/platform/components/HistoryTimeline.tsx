@@ -1,4 +1,4 @@
-import type { AuditEntry } from "@/platform/api";
+import type { HistoryEntry } from "@/platform/api";
 import { actionLabel, formatDateTime } from "@/platform/format";
 import { summarizeDiff, type HistoryOptions } from "@/platform/components/diff";
 import { usePersona } from "@/platform/persona";
@@ -11,7 +11,7 @@ export function HistoryTimeline({
   className,
   options,
 }: {
-  entries: AuditEntry[] | undefined;
+  entries: HistoryEntry[] | undefined;
   loading?: boolean;
   className?: string;
   options?: HistoryOptions;

@@ -17,6 +17,9 @@ from backend.platform.paging import PageParams, page_params, paginate
 
 router = APIRouter(prefix="/refunds", tags=["refunds"])
 
+# The steps shown on the history timeline to roles without audit.read.
+WORKFLOW_ACTIONS = ("refund.request", "refund.approve", "refund.reject", "refund.pay")
+
 SORT_COLUMNS = {
     "reference": Refund.reference,
     "amount_cents": Refund.amount_cents,
@@ -108,8 +111,14 @@ def refund_history(
 ) -> dict[str, Any]:
     POLICY.require(user, "refund.read")
     refund = service.get_scoped(session, user, refund_id)
-    rows = session.scalars(audit.entries_for_record(POLICY.app, RECORD_TYPE, refund.reference)).all()
-    return {"items": [row.to_dict() for row in rows], "total": len(rows)}
+    return audit.record_history(
+        session,
+        POLICY,
+        user,
+        record_type=RECORD_TYPE,
+        record_id=refund.reference,
+        workflow_actions=WORKFLOW_ACTIONS,
+    )
 
 
 class RequestBody(BaseModel):

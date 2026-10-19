@@ -17,6 +17,9 @@ from backend.platform.paging import PageParams, page_params, paginate
 
 router = APIRouter(prefix="/kyc", tags=["kyc"])
 
+# The steps shown on the history timeline to roles without audit.read.
+WORKFLOW_ACTIONS = ("case.claim", "case.recommend", "case.decide")
+
 SORT_COLUMNS = {
     "reference": Case.reference,
     "country": Case.country,
@@ -140,8 +143,14 @@ def case_history(
 ) -> dict[str, Any]:
     POLICY.require(user, "case.read")
     case = service.get_scoped(session, user, case_id)
-    rows = session.scalars(audit.entries_for_record(POLICY.app, RECORD_TYPE, case.reference)).all()
-    return {"items": [row.to_dict() for row in rows], "total": len(rows)}
+    return audit.record_history(
+        session,
+        POLICY,
+        user,
+        record_type=RECORD_TYPE,
+        record_id=case.reference,
+        workflow_actions=WORKFLOW_ACTIONS,
+    )
 
 
 class VersionBody(BaseModel):
