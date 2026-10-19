@@ -25,7 +25,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: `mkdir -p test-results && cd ${repoRoot} && ${backendEnv} uv run --project backend python -m backend.seed && ${backendEnv} uv run --project backend uvicorn backend.main:app --host 127.0.0.1 --port 8000`,
+      command: `mkdir -p test-results && cd ${repoRoot} && ${backendEnv} uv run --project backend --no-sync python -m backend.seed && ${backendEnv} uv run --project backend --no-sync uvicorn backend.main:app --host 127.0.0.1 --port 8000`,
       url: "http://127.0.0.1:8000/health",
       reuseExistingServer: !isCI,
       timeout: 180_000,
