@@ -1,10 +1,12 @@
-"""Mock sign-in. `X-Dev-User` names a seeded persona and is honoured only when APP_ENV=dev.
+"""Mock sign-in. `X-Dev-User` names a seeded persona and is honoured only when APP_ENV=dev, and then only for
+requests from this machine (loopback peer, Host header allowlisted in `create_app`).
 
 Production would use Entra ID OIDC; the rest of the foundation only sees `User`.
 """
 
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -61,9 +63,19 @@ def _to_user(row: UserRow) -> User:
     )
 
 
+def _is_loopback(host: str | None) -> bool:
+    try:
+        return host is not None and ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def require_dev_mode(request: Request) -> None:
     if not request.app.state.settings.dev_mode:
         raise ApiError(401, "AUTH_REQUIRED", "Mock sign-in is only available when APP_ENV=dev.")
+    # if the API is bound to a non-loopback interface, other machines still cannot use the mock sign-in
+    if not _is_loopback(request.client.host if request.client else None):
+        raise ApiError(401, "DEV_SIGNIN_LOCAL_ONLY", "Mock sign-in only answers requests from this machine.")
 
 
 def current_user(

@@ -5,12 +5,16 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from backend.platform import audit, audit_routes, auth, health
 from backend.platform.db import Database
 from backend.platform.errors import install_error_handlers
 from backend.platform.registry import AppManifest, Registry
 from backend.platform.settings import Settings
+
+# In dev mode the API answers only requests addressed to this machine by name (blocks DNS rebinding).
+DEV_HOSTS = ["localhost", "127.0.0.1"]
 
 REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
 
@@ -45,6 +49,9 @@ def create_app(settings: Settings, manifests: list[AppManifest], *, create_schem
         response = await call_next(request)
         response.headers["X-Request-Id"] = request.state.request_id
         return response
+
+    if settings.dev_mode:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=DEV_HOSTS)
 
     install_error_handlers(app)
     app.include_router(health.router)

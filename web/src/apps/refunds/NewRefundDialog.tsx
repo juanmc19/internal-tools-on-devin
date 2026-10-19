@@ -196,6 +196,9 @@ export function NewRefundDialog({
                   value={form.reported_on}
                   onChange={(e) => set("reported_on", e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Within the last 2 years, and not in the future.
+                </p>
               </div>
             )}
             <div className="col-span-2 space-y-2">

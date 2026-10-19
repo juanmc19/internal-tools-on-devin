@@ -3,7 +3,7 @@ separation of duties, the change, its audit entry, commit. Nothing persists unle
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,9 @@ from backend.platform.policy import Policy
 POLICY = Policy.load(Path(__file__).with_name("policy.yaml"))
 RECORD_TYPE = "refund"
 STEP = "approve"
+# Reg E gives the customer 60 days from the statement to report; anything this old is a typo, and a far-past
+# date would only push the deadline maths to extremes
+REPORTED_ON_MAX_AGE_DAYS = 730
 
 
 def to_record(refund: Refund) -> dict[str, Any]:
@@ -96,6 +99,18 @@ def _next_reference(session: Session) -> str:
     return f"TEST-RFD-{next_id:06d}"
 
 
+def _check_reported_on(reported_on: str) -> None:
+    try:
+        reported = date.fromisoformat(reported_on)
+    except ValueError:
+        raise ApiError(400, "INVALID_REPORTED_ON", "The report date is not a real date.") from None
+    today = business_days.today()
+    if reported > today:
+        raise ApiError(400, "REPORTED_ON_IN_FUTURE", "The report date cannot be in the future.")
+    if reported < today - timedelta(days=REPORTED_ON_MAX_AGE_DAYS):
+        raise ApiError(400, "REPORTED_ON_TOO_OLD", "The report date cannot be more than 2 years ago.")
+
+
 def request(
     session: Session,
     user: User,
@@ -126,8 +141,8 @@ def request(
         raise ApiError(400, "REPORTED_ON_REQUIRED", "A dispute needs the date the customer reported it.")
     if type == "goodwill":
         reported_on = None
-    elif date.fromisoformat(reported_on) > business_days.today():
-        raise ApiError(400, "REPORTED_ON_IN_FUTURE", "The report date cannot be in the future.")
+    else:
+        _check_reported_on(reported_on)
     deadline_on = business_days.deadline_for(reported_on)
     _check_region_in_scope(user, region)
     now = audit.now_iso()

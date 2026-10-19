@@ -14,6 +14,7 @@ from backend.apps.refunds.seed import PERSONAS, seed
 from backend.platform.app import create_app
 from backend.platform.auth import RoleAssignment, upsert_user
 from backend.platform.settings import Settings
+from backend.tests.conftest import local_client
 
 GABRIELA, HUGO, INES, JAVIER, KARLA, ELENA = (p[0] for p in PERSONAS)
 T0 = "2026-10-01T00:00:00Z"
@@ -83,14 +84,14 @@ def db_path(tmp_path):
 
 @pytest.fixture
 def client(db_path) -> Iterator[TestClient]:
-    with TestClient(build_app(db_path)) as c:
+    with local_client(build_app(db_path)) as c:
         yield c
 
 
 @pytest.fixture(scope="module")
 def big_client(tmp_path_factory) -> Iterator[TestClient]:
     """The real 20,000-refund seed, built once per module."""
-    with TestClient(build_app(tmp_path_factory.mktemp("big") / "refunds.db", full=True)) as c:
+    with local_client(build_app(tmp_path_factory.mktemp("big") / "refunds.db", full=True)) as c:
         yield c
 
 

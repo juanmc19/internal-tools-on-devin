@@ -4,12 +4,20 @@ fixed by monkeypatching `business_days.today`."""
 
 from __future__ import annotations
 
-from datetime import date
+import random
+import time
+from datetime import date, timedelta
 
 import pytest
 
 from backend.apps.refunds import business_days
-from backend.apps.refunds.business_days import add_business_days, deadline_for, federal_holidays
+from backend.apps.refunds.business_days import (
+    add_business_days,
+    business_days_between,
+    deadline_for,
+    federal_holidays,
+    is_business_day,
+)
 from backend.tests.refunds.conftest import GABRIELA, INES, as_user
 
 SMALL_NE = 1  # goodwill
@@ -105,6 +113,57 @@ def test_tlr1_days_left_counts_down_to_zero_then_negative(client, monkeypatch):
         monkeypatch.setattr(business_days, "today", lambda d=as_of: d)
         got = client.get(f"/refunds/{LARGE_NE}", headers=as_user(INES)).json()["business_days_left"]
         assert got == left, as_of  # 14 Oct: 5, 6, 7, 8, 9, (12 is Columbus Day), 13, 14 = 7 overdue
+
+
+def _business_days_between_by_walking(start: date, end: date) -> int:
+    if end < start:
+        return -_business_days_between_by_walking(end, start)
+    count, day = 0, start
+    while day < end:
+        day += timedelta(days=1)
+        count += is_business_day(day)
+    return count
+
+
+def test_tlr1_business_days_between_matches_a_day_by_day_count():
+    rng = random.Random(7)
+    pairs = [(date(2026, 9, 20), date(2026, 10, 2)), (date(2027, 12, 23), date(2028, 1, 4))]
+    # around the 400-year cycle boundaries the closed form relies on
+    pairs += [(date(1999, 12, 24), date(2000, 1, 4)), (date(2399, 12, 24), date(2400, 1, 4))]
+    for _ in range(300):
+        start = date(1995, 1, 1) + timedelta(days=rng.randint(0, 365 * 12))
+        pairs.append((start, start + timedelta(days=rng.randint(-400, 400))))
+    for start, end in pairs:
+        assert business_days_between(start, end) == _business_days_between_by_walking(start, end), (
+            start,
+            end,
+        )
+
+
+def test_tlr1_business_days_between_is_constant_time_for_any_gap():
+    started = time.perf_counter()
+    for _ in range(1_000):
+        days = business_days_between(date(1, 1, 15), date(2026, 10, 1))
+    assert time.perf_counter() - started < 0.5
+    assert days == business_days_between(date(1, 1, 15), date(1626, 10, 1)) + business_days_between(
+        date(1626, 10, 1), date(2026, 10, 1)
+    )
+    assert -days == business_days_between(date(2026, 10, 1), date(1, 1, 15))
+
+
+@pytest.mark.parametrize(
+    ("reported_on", "code"),
+    [
+        ("0001-01-01", "REPORTED_ON_TOO_OLD"),
+        ("2024-09-30", "REPORTED_ON_TOO_OLD"),  # 731 days before 1 Oct 2026
+        ("2026-02-30", "INVALID_REPORTED_ON"),
+        ("2026-13-01", "INVALID_REPORTED_ON"),
+    ],
+)
+def test_tlr1_report_date_must_be_a_real_date_within_two_years(client, today, reported_on, code):
+    r = client.post("/refunds", json=dispute(reported_on), headers=as_user(GABRIELA))
+    assert r.status_code == 400 and r.json()["code"] == code
+    assert client.post("/refunds", json=dispute("2024-10-01"), headers=as_user(GABRIELA)).status_code == 201
 
 
 # ---- TLR-2: sort by most urgent on the server, overdue flagged ---------------------------------------------

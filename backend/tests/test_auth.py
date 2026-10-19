@@ -1,6 +1,6 @@
 """FND-1: sign-in fails closed."""
 
-from backend.tests.conftest import as_user
+from backend.tests.conftest import as_user, local_client
 
 
 def test_fnd1_without_dev_env_every_authenticated_endpoint_is_401(prod_client):
@@ -58,3 +58,22 @@ def test_me_and_dev_users_describe_personas(client):
     manager = next(u for u in users if u["id"] == "manager_1")
     assert manager["roles"][0]["scope"] == ["All"]
     assert manager["roles"][0]["masked"] is False
+
+
+def test_fnd1_dev_signin_refuses_hosts_outside_the_allowlist(client):
+    # a DNS-rebinding page reaches 127.0.0.1:8000 with its own name in the Host header
+    for path in ["/me", "/dev/users", "/health"]:
+        response = client.get(path, headers={**as_user("manager_1"), "Host": "rebind.example:8000"})
+        assert response.status_code == 400, path
+    assert client.get("/me", headers={**as_user("manager_1"), "Host": "localhost:8000"}).status_code == 200
+    assert client.get("/me", headers={**as_user("manager_1"), "Host": "127.0.0.1:8000"}).status_code == 200
+
+
+def test_fnd1_dev_signin_refuses_callers_that_are_not_loopback(app):
+    with local_client(app, client_host="192.168.1.20") as remote:
+        for path in ["/me", "/dev/users", "/testapp/widgets"]:
+            response = remote.get(path, headers=as_user("manager_1"))
+            assert response.status_code == 401, path
+            assert response.json()["code"] == "DEV_SIGNIN_LOCAL_ONLY"
+    with local_client(app, client_host="::1") as ipv6_loopback:
+        assert ipv6_loopback.get("/me", headers=as_user("manager_1")).status_code == 200

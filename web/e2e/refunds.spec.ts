@@ -236,3 +236,32 @@ test("queue sorted by Reg E deadline shows overdue disputes first, flagged; good
   await expect(rows.first().getByTestId("deadline-none")).toHaveText("—");
   await expect(page.getByTestId("deadline-overdue")).toHaveCount(0);
 });
+
+test("a dispute reported more than 2 years ago is refused with REPORTED_ON_TOO_OLD", async ({
+  page,
+}) => {
+  await page.goto("/refunds");
+  await switchPersona(page, GABRIELA);
+  await page.getByTestId("new-refund").click();
+  const dialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByTestId("new-submit") });
+  await dialog.getByTestId("new-customer").fill("Test Customer");
+  await dialog.getByTestId("new-last4").fill("4242");
+  await dialog.getByTestId("new-amount").fill("25");
+  await dialog.getByTestId("new-type").click();
+  await page.getByRole("option", { name: "Dispute", exact: true }).click();
+  await dialog.getByTestId("new-reported").fill("2001-01-01");
+  await dialog
+    .getByTestId("new-reason")
+    .fill("Customer does not recognise the transaction.");
+  await dialog.getByTestId("new-submit").click();
+  const toast = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "REPORTED_ON_TOO_OLD" });
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText(
+    "The report date cannot be more than 2 years ago.",
+  );
+  await expect(dialog).toBeVisible();
+});
