@@ -1,9 +1,10 @@
-"""`make seed`: recreates the database and runs every registered app's seed."""
+"""`make seed`: resets the database in place and runs every registered app's seed."""
 
 from __future__ import annotations
 
 import time
-from pathlib import Path
+
+from sqlalchemy import MetaData
 
 from backend.apps import MANIFESTS
 from backend.platform.db import Database
@@ -12,11 +13,12 @@ from backend.platform.settings import Settings
 
 def main() -> None:
     settings = Settings.from_env()
-    if settings.database_url.startswith("sqlite:///"):
-        path = Path(settings.database_url.removeprefix("sqlite:///"))
-        for suffix in ("", "-wal", "-shm"):
-            Path(str(path) + suffix).unlink(missing_ok=True)
     db = Database(settings.database_url)
+    # Drop every table in the existing file instead of deleting the file: a running API keeps its pooled
+    # connections open, and a deleted file stays readable through them, so it would serve stale data.
+    existing = MetaData()
+    existing.reflect(bind=db.engine)
+    existing.drop_all(bind=db.engine)
     db.create_schema()
     for manifest in MANIFESTS:
         if manifest.seed is None:

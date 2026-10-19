@@ -10,7 +10,7 @@ setup:            ## install backend and frontend dependencies (+ Playwright Chr
 	$(NPM) ci
 	$(NPM) exec -- playwright install chromium
 
-seed:             ## recreate the SQLite database and seed every registered app
+seed:             ## reset the SQLite database in place and seed every registered app
 	$(UV) python -m backend.seed
 
 run:              ## API on :8000 (APP_ENV=dev enables the mock sign-in)

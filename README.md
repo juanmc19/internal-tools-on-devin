@@ -17,10 +17,13 @@ Needs Python 3.12 (via [uv](https://docs.astral.sh/uv/)) and Node 20.
 
 ```sh
 make setup   # uv sync, npm ci, Playwright Chromium
-make seed    # recreate backend/data/app.db and seed every registered app
+make seed    # reset backend/data/app.db in place and seed every registered app
 make run     # API on http://127.0.0.1:8000 (APP_ENV=dev turns on the mock sign-in)
 make web     # web on http://127.0.0.1:5173 (proxies /api to :8000)
 ```
+
+`make seed` can run while the API is up: it drops and recreates the tables in the existing file, so the running
+API serves the fresh data without a restart.
 
 Then `make test` (pytest), `make lint` (ruff, eslint, tsc), `make e2e` (Playwright; starts both servers against
 a fresh seeded database), `make bench` (p95 for list, filter, search) and `make foundation-diff` (lines changed
