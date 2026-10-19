@@ -32,10 +32,8 @@ export function RecordSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl" data-testid="record-sheet">
         <SheetHeader className="gap-1 border-b px-6 py-4">
-          <div className="flex items-center gap-2">
-            <SheetTitle className="font-mono text-base">{title}</SheetTitle>
-            {badges}
-          </div>
+          <SheetTitle className="pr-8 font-mono text-base whitespace-nowrap">{title}</SheetTitle>
+          {badges ? <div className="flex flex-wrap items-center gap-1.5">{badges}</div> : null}
           {description ? <SheetDescription>{description}</SheetDescription> : <SheetDescription className="sr-only">Record detail</SheetDescription>}
         </SheetHeader>
         <div className="flex-1 px-6 py-4">
