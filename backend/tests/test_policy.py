@@ -165,3 +165,82 @@ def test_refusal_write_runs_off_the_event_loop(client, app, monkeypatch):
     monkeypatch.setattr(audit, "record_refusal", fake)
     assert client.get("/audit?app=testapp", headers=as_user("viewer_north")).status_code == 403
     assert seen == ["worker thread"]
+
+
+APPROVALS_BASE = {**BASE, "approvals": {"approve": {"distinct_from": ["requested_by"]}}}
+
+
+def _manifest(policy: Policy, model: type | None):
+    from dataclasses import replace
+
+    from backend.tests.testapp.app import MANIFEST
+
+    return replace(MANIFEST, key=policy.app, policy=policy, record_model=model)
+
+
+def test_fnd2_mistyped_approval_field_fails_closed_at_registration():
+    from backend.platform.registry import Registry
+    from backend.tests.testapp.app import Widget
+
+    typo = Policy.from_dict({**BASE, "approvals": {"approve": {"distinct_from": ["requestd_by"]}}})
+    with pytest.raises(PolicyError, match="'requestd_by' is not a field on Widget"):
+        Registry([_manifest(typo, Widget)])
+    bad_hop = Policy.from_dict(
+        {**BASE, "approvals": {"approve": {"distinct_from": ["approvals.aprover_id"]}}}
+    )
+    with pytest.raises(PolicyError, match="'approvals.aprover_id' is not a field"):
+        Registry([_manifest(bad_hop, Widget)])
+    count_typo = Policy.from_dict(
+        {
+            **BASE,
+            "approvals": {
+                "approve": {"count": {"rules": [{"when": {"field": "amout", "gt": 1}, "then": 2}]}}
+            },
+        }
+    )
+    with pytest.raises(PolicyError, match="'amout' is not a field"):
+        Registry([_manifest(count_typo, Widget)])
+    with pytest.raises(PolicyError, match="needs record_model"):
+        Registry([_manifest(Policy.from_dict(APPROVALS_BASE), None)])
+    Registry([_manifest(Policy.from_dict(APPROVALS_BASE), Widget)])
+    Registry([_manifest(POLICY, Widget)])
+
+
+def test_fnd2_mistyped_approval_field_fails_closed_at_request_time():
+    typo = Policy.from_dict({**BASE, "approvals": {"approve": {"distinct_from": ["requestd_by"]}}})
+    with pytest.raises(PolicyError, match="requestd_by"):
+        typo.check_separation("approve", "u1", {"requested_by": "u1"}, record_type="x", record_id="1")
+    count_typo = Policy.from_dict(
+        {
+            **BASE,
+            "approvals": {
+                "approve": {"count": {"rules": [{"when": {"field": "amout", "gt": 1}, "then": 2}]}}
+            },
+        }
+    )
+    with pytest.raises(PolicyError, match="amout"):
+        count_typo.required_approvals("approve", {"amount": 5})
+
+
+def test_fnd2_overlapping_count_rules_require_the_strictest_match():
+    tiers = [
+        {"when": {"field": "amount", "gt": 1000}, "then": 2},
+        {"when": {"field": "amount", "gt": 10000}, "then": 3},
+    ]
+    for rules in (tiers, list(reversed(tiers))):
+        policy = Policy.from_dict(
+            {**BASE, "approvals": {"approve": {"count": {"default": 1, "rules": rules}}}}
+        )
+        assert policy.required_approvals("approve", {"amount": 500}) == 1
+        assert policy.required_approvals("approve", {"amount": 5000}) == 2
+        assert policy.required_approvals("approve", {"amount": 60000}) == 3
+        assert not policy.approvals_complete("approve", {"amount": 60000}, ["a", "b"])
+        assert policy.approvals_complete("approve", {"amount": 60000}, ["a", "b", "c"])
+
+
+def test_fnd2_app_policies_pass_field_checks():
+    from backend.apps import MANIFESTS
+    from backend.platform.registry import Registry
+
+    Registry(MANIFESTS)
+    assert all(m.record_model is not None for m in MANIFESTS if m.policy.approvals)

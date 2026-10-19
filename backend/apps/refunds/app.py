@@ -25,4 +25,5 @@ MANIFEST = AppManifest(
     count_records=count_records,
     seed=seed,
     record_type=RECORD_TYPE,
+    record_model=Refund,
 )

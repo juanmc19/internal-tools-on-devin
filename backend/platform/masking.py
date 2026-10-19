@@ -23,11 +23,14 @@ def last4(value: object) -> object:
 
 
 def city_only(value: object) -> object:
-    """Keeps the last comma-separated component of an address ("12 Elm St, Austin" -> "Austin")."""
+    """Keeps the last comma-separated component of an address ("12 Elm St, Austin" -> "Austin").
+
+    Fails closed: without a separate city component the whole value is masked.
+    """
     if value is None:
         return None
     parts = [p.strip() for p in str(value).split(",") if p.strip()]
-    return parts[-1] if parts else MASK
+    return parts[-1] if len(parts) >= 2 else MASK
 
 
 def day_only(value: object) -> object:

@@ -98,3 +98,19 @@ def test_fnd1_kyc_endpoints_fail_closed(client, tmp_path):
     assert r.status_code == 403 and r.json()["code"] == "UNKNOWN_ROLE"
     with TestClient(build_app(tmp_path / "prod.db", env="prod")) as prod:
         assert prod.get("/kyc/cases", headers=as_user(ANA)).status_code == 401
+
+
+def test_analyst_history_shows_only_workflow_steps(client):
+    client.get(f"/kyc/cases/{MX_CASE}", headers=as_user(CAMILA))
+    client.get(f"/kyc/cases/{MX_CASE}?unmasked=true", headers=as_user(ANA))
+    case = client.get(f"/kyc/cases/{MX_CASE}", headers=as_user(ANA)).json()
+    client.post(f"/kyc/cases/{MX_CASE}/claim", json={"version": case["version"]}, headers=as_user(ANA))
+    full = client.get(f"/kyc/cases/{MX_CASE}/history", headers=as_user(ELENA)).json()["items"]
+    assert {"case.read_unmasked", "case.claim"} <= {e["action"] for e in full}
+    assert all(e["hash"] and "request_id" in e for e in full)
+    trimmed = client.get(f"/kyc/cases/{MX_CASE}/history", headers=as_user(ANA)).json()
+    assert trimmed["total"] == len(trimmed["items"]) and trimmed["items"]
+    assert {e["action"] for e in trimmed["items"]} <= {"case.claim", "case.recommend", "case.decide"}
+    claim = next(e for e in trimmed["items"] if e["action"] == "case.claim")
+    assert claim["actor_id"] == ANA and claim["diff"]["status"]["to"] == "in_review"
+    assert not any({"request_id", "hash", "prev_hash"} & e.keys() for e in trimmed["items"])

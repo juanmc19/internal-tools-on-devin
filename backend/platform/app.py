@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 
 from fastapi import FastAPI, Request
@@ -10,6 +11,14 @@ from backend.platform.db import Database
 from backend.platform.errors import install_error_handlers
 from backend.platform.registry import AppManifest, Registry
 from backend.platform.settings import Settings
+
+REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
+
+
+def resolve_request_id(supplied: str | None) -> str:
+    if supplied is not None and REQUEST_ID_PATTERN.fullmatch(supplied):
+        return supplied
+    return uuid.uuid4().hex
 
 
 def create_app(settings: Settings, manifests: list[AppManifest], *, create_schema: bool = True) -> FastAPI:
@@ -32,7 +41,7 @@ def create_app(settings: Settings, manifests: list[AppManifest], *, create_schem
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):
-        request.state.request_id = request.headers.get("X-Request-Id") or uuid.uuid4().hex[:16]
+        request.state.request_id = resolve_request_id(request.headers.get("X-Request-Id"))
         response = await call_next(request)
         response.headers["X-Request-Id"] = request.state.request_id
         return response
