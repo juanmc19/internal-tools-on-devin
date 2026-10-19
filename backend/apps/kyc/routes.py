@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
@@ -40,7 +40,12 @@ def _filtered(
 ) -> Select:
     stmt = POLICY.scoped(user, select(Case), Case)
     if status:
-        stmt = stmt.where(Case.status == status)
+        statuses = [part.strip() for part in status.split(",") if part.strip()]
+        stmt = (
+            stmt.where(Case.status.in_(statuses))
+            if len(statuses) > 1
+            else stmt.where(Case.status == statuses[0])
+        )
     if country:
         stmt = stmt.where(Case.country == country)
     if risk:
@@ -63,7 +68,7 @@ def _filtered(
 
 @router.get("/cases")
 def list_cases(
-    status: str | None = None,
+    status: str | None = Query(None, description="One status or a comma-separated list, e.g. new,in_review"),
     country: str | None = None,
     risk: str | None = None,
     screening_result: str | None = None,
@@ -83,19 +88,12 @@ def list_cases(
         q=q,
         assignee_id=assignee_id,
     )
+    if params.sort is None:
+        # newest activity first unless the caller picks a sort
+        params = PageParams(page=params.page, page_size=params.page_size, sort="updated_at", order="desc")
     page = paginate(
         session, stmt, params, sort_columns=SORT_COLUMNS, default_sort="updated_at", tiebreaker=Case.id
     )
-    if params.sort is None and params.order == "asc":
-        # newest activity first by default
-        page = paginate(
-            session,
-            stmt,
-            PageParams(page=params.page, page_size=params.page_size, sort="updated_at", order="desc"),
-            sort_columns=SORT_COLUMNS,
-            default_sort="updated_at",
-            tiebreaker=Case.id,
-        )
     return page.to_dict(service.serialize_row)
 
 

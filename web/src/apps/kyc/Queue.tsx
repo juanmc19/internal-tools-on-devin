@@ -30,11 +30,13 @@ import { CaseStatusBadge, RiskBadge, ScreeningBadge } from "./badges";
 import { CaseSheet } from "./CaseSheet";
 
 const ALL = "__all__";
+const OPEN = "new,in_review,recommended";
+/** Open the queue on work to do: open cases, oldest first. Every status is one click away in the filter. */
 const INITIAL: TableState = {
   page: 1,
   pageSize: 50,
-  sort: "updated_at",
-  order: "desc",
+  sort: "created_at",
+  order: "asc",
 };
 
 type Filters = {
@@ -45,7 +47,7 @@ type Filters = {
   q: string;
 };
 const NO_FILTERS: Filters = {
-  status: ALL,
+  status: OPEN,
   country: ALL,
   risk: ALL,
   screening_result: ALL,
@@ -186,6 +188,7 @@ export function Queue() {
         onChange={setFilter("status")}
         placeholder="Status"
         options={STATUSES}
+        leading={[{ value: OPEN, label: "Open · new, in review, recommended" }]}
       />
       <FilterSelect
         testId="filter-country"
@@ -209,7 +212,10 @@ export function Queue() {
         options={[...SCREENING]}
       />
       {(filters.q ||
-        Object.values(filters).some((v) => v !== ALL && v !== "")) && (
+        filters.status !== OPEN ||
+        [filters.country, filters.risk, filters.screening_result].some(
+          (v) => v !== ALL,
+        )) && (
         <Button
           variant="ghost"
           size="sm"
@@ -256,12 +262,14 @@ function FilterSelect({
   onChange,
   placeholder,
   options,
+  leading = [],
 }: {
   testId: string;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   options: readonly string[];
+  leading?: { value: string; label: string }[];
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
@@ -269,6 +277,11 @@ function FilterSelect({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
+        {leading.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
         <SelectItem value={ALL}>All · {placeholder.toLowerCase()}</SelectItem>
         {options.map((o) => (
           <SelectItem key={o} value={o}>

@@ -39,6 +39,7 @@ import {
   type Outcome,
 } from "./api";
 import { CaseStatusBadge, RiskBadge, ScreeningBadge } from "./badges";
+import { HISTORY } from "./history";
 
 type Pending = "recommend" | "decide" | null;
 
@@ -197,6 +198,7 @@ export function CaseSheet({
         actions={actions}
         history={history}
         historyLoading={history === undefined}
+        historyOptions={HISTORY}
       >
         {c && (
           <div className="space-y-6">

@@ -6,6 +6,7 @@ import { EmptyState } from "@/platform/components/EmptyState";
 import { usePersona } from "@/platform/persona";
 import { APP } from "./api";
 import { Queue } from "./Queue";
+import { HISTORY } from "./history";
 
 const KYC_ACTIONS = [
   "case.claim",
@@ -54,7 +55,7 @@ export function KycApp() {
           path="audit"
           element={
             canAudit ? (
-              <AuditView app={APP} actions={KYC_ACTIONS} />
+              <AuditView app={APP} actions={KYC_ACTIONS} options={HISTORY} />
             ) : (
               <Navigate to="/kyc" replace />
             )

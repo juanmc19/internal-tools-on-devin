@@ -15,6 +15,15 @@ def test_scl1_exact_totals_for_any_filter(big_client):
             "count"
         ]
     assert new + not_new == 50_000
+    open_total = big_client.get(
+        "/kyc/cases?status=new,in_review,recommended&sort=created_at&order=asc", headers=as_user(CAMILA)
+    ).json()
+    assert (
+        open_total["total"]
+        == 50_000
+        - big_client.get("/kyc/cases/count?status=approved,rejected", headers=as_user(CAMILA)).json()["count"]
+    )
+    assert open_total["items"][0]["created_at"] <= open_total["items"][-1]["created_at"]
     mx = big_client.get("/kyc/cases/count?country=MX", headers=as_user(CAMILA)).json()["count"]
     co = big_client.get("/kyc/cases/count?country=CO", headers=as_user(CAMILA)).json()["count"]
     assert big_client.get("/kyc/cases", headers=as_user(ANA)).json()["total"] == mx + co

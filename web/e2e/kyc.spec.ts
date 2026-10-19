@@ -14,10 +14,12 @@ async function switchPersona(page: Page, id: string) {
 
 async function openNewCase(page: Page): Promise<string> {
   const filtered = page.waitForResponse(
-    (r) => r.url().includes("/kyc/cases?") && r.url().includes("status=new"),
+    (r) =>
+      r.url().includes("/kyc/cases?") &&
+      new URL(r.url()).searchParams.get("status") === "new",
   );
   await page.getByTestId("filter-status").click();
-  await page.getByRole("option", { name: "New" }).click();
+  await page.getByRole("option", { name: "New", exact: true }).click();
   await filtered;
   const row = page.locator("[data-testid^='kyc-row-']").first();
   await expect(row).toContainText("New");
@@ -99,7 +101,15 @@ test("recommender is refused on Decide, another senior reviewer decides, chain v
     "Documents consistent; screening clear.",
   );
   await expect(page.getByTestId("record-sheet")).toContainText("Recommended");
-  await expect(page.getByTestId("history-timeline")).toContainText("Recommend");
+  await expect(page.getByTestId("history-timeline")).toContainText(
+    "Recommended",
+  );
+  await expect(page.getByTestId("history-timeline")).toContainText(
+    "Assigned to Camila Torres",
+  );
+  await expect(page.getByTestId("history-timeline")).toContainText(
+    "Viewed unmasked: name, date of birth, ID number, address",
+  );
 
   // same person tries to decide: the button is there, the API refuses
   await page.getByTestId("action-decide").click();
@@ -122,14 +132,14 @@ test("recommender is refused on Decide, another senior reviewer decides, chain v
   await expect(page.getByTestId("record-sheet")).toBeHidden();
   await switchPersona(page, DIEGO);
   await page.getByTestId("filter-status").click();
-  await page.getByRole("option", { name: "Recommended" }).click();
+  await page.getByRole("option", { name: "Recommended", exact: true }).click();
   await page.getByTestId("kyc-search").fill(reference);
   await page.getByTestId(`kyc-row-${reference}`).click();
   await expect(page.getByTestId("record-sheet")).toContainText(reference);
   await page.getByTestId("action-decide").click();
   await confirmDialog(page, "Approve");
   await expect(page.getByTestId("record-sheet")).toContainText("Approved");
-  await expect(page.getByTestId("history-timeline")).toContainText("Decide");
+  await expect(page.getByTestId("history-timeline")).toContainText("Decided");
 
   // audit view: entries for the case and a verified chain
   await page

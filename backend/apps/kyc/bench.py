@@ -3,6 +3,11 @@
 BENCHMARKS = [
     ("list (senior, all countries)", "TEST-USR-CAMILA", "/kyc/cases?page=1&page_size=50"),
     ("list (analyst, MX+CO)", "TEST-USR-ANA", "/kyc/cases?page=1&page_size=50"),
+    (
+        "queue default (open, oldest first)",
+        "TEST-USR-ANA",
+        "/kyc/cases?status=new,in_review,recommended&sort=created_at&order=asc",
+    ),
     ("list page 500", "TEST-USR-CAMILA", "/kyc/cases?page=500&page_size=50"),
     ("filter status=new&country=MX", "TEST-USR-ANA", "/kyc/cases?status=new&country=MX"),
     ("filter risk=high&screening=match", "TEST-USR-CAMILA", "/kyc/cases?risk=high&screening_result=match"),
