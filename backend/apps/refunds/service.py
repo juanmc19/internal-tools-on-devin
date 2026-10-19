@@ -3,7 +3,7 @@ separation of duties, the change, its audit entry, commit. Nothing persists unle
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +22,7 @@ RECORD_TYPE = "refund"
 STEP = "approve"
 # Reg E gives the customer 60 days from the statement to report; anything this old is a typo, and a far-past
 # date would only push the deadline maths to extremes
-REPORTED_ON_MAX_AGE_DAYS = 730
+REPORTED_ON_MAX_AGE_YEARS = 2
 
 
 def to_record(refund: Refund) -> dict[str, Any]:
@@ -99,6 +99,14 @@ def _next_reference(session: Session) -> str:
     return f"TEST-RFD-{next_id:06d}"
 
 
+def _years_before(day: date, years: int) -> date:
+    """The same calendar date `years` earlier; 29 February maps to 28 February in a non-leap year."""
+    try:
+        return day.replace(year=day.year - years)
+    except ValueError:
+        return day.replace(year=day.year - years, day=28)
+
+
 def _check_reported_on(reported_on: str) -> None:
     try:
         reported = date.fromisoformat(reported_on)
@@ -107,7 +115,7 @@ def _check_reported_on(reported_on: str) -> None:
     today = business_days.today()
     if reported > today:
         raise ApiError(400, "REPORTED_ON_IN_FUTURE", "The report date cannot be in the future.")
-    if reported < today - timedelta(days=REPORTED_ON_MAX_AGE_DAYS):
+    if reported < _years_before(today, REPORTED_ON_MAX_AGE_YEARS):
         raise ApiError(400, "REPORTED_ON_TOO_OLD", "The report date cannot be more than 2 years ago.")
 
 

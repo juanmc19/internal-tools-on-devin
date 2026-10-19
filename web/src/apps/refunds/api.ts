@@ -72,8 +72,8 @@ export const formatUsd = (cents: number) =>
 export const listRefunds = (query: ListQuery) =>
   api<Page<Refund>>(`/refunds${qs(query)}`);
 export const getRefund = (id: number) => api<Refund>(`/refunds/${id}`);
-export const getHistory = (id: number) =>
-  api<{ items: HistoryEntry[]; total: number }>(`/refunds/${id}/history`);
+export const getHistory = (id: number, page = 1) =>
+  api<Page<HistoryEntry>>(`/refunds/${id}/history${qs({ page })}`);
 export const createRefund = (body: NewRefund) =>
   api<Refund>("/refunds", { method: "POST", body });
 export const approveRefund = (id: number, version: number) =>

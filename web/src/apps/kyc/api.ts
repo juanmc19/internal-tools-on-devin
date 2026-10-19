@@ -51,8 +51,8 @@ export const SCREENING = ["clear", "possible_match", "match"] as const;
 export const listCases = (query: ListQuery) =>
   api<Page<KycCase>>(`/kyc/cases${qs(query)}`);
 export const getCase = (id: number) => api<KycCase>(`/kyc/cases/${id}`);
-export const getHistory = (id: number) =>
-  api<{ items: HistoryEntry[]; total: number }>(`/kyc/cases/${id}/history`);
+export const getHistory = (id: number, page = 1) =>
+  api<Page<HistoryEntry>>(`/kyc/cases/${id}/history${qs({ page })}`);
 export const claimCase = (id: number, version: number) =>
   api<KycCase>(`/kyc/cases/${id}/claim`, { method: "POST", body: { version } });
 export const recommendCase = (

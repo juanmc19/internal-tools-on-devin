@@ -114,3 +114,18 @@ def test_analyst_history_shows_only_workflow_steps(client):
     claim = next(e for e in trimmed["items"] if e["action"] == "case.claim")
     assert claim["actor_id"] == ANA and claim["diff"]["status"]["to"] == "in_review"
     assert not any({"request_id", "hash", "prev_hash"} & e.keys() for e in trimmed["items"])
+
+
+def test_case_history_route_is_paged(client):
+    for _ in range(3):
+        client.get(f"/kyc/cases/{MX_CASE}?unmasked=true", headers=as_user(CAMILA))
+    everything = client.get(f"/kyc/cases/{MX_CASE}/history", headers=as_user(ELENA)).json()
+    assert everything["page"] == 1 and everything["page_size"] == 50
+    total = everything["total"]
+    assert total >= 3
+    first = client.get(f"/kyc/cases/{MX_CASE}/history?page_size=2", headers=as_user(ELENA)).json()
+    second = client.get(f"/kyc/cases/{MX_CASE}/history?page_size=2&page=2", headers=as_user(ELENA)).json()
+    assert first["total"] == second["total"] == total and len(first["items"]) == 2
+    assert [e["id"] for e in first["items"] + second["items"]] == [e["id"] for e in everything["items"][:4]]
+    too_big = client.get(f"/kyc/cases/{MX_CASE}/history?page_size=201", headers=as_user(ELENA))
+    assert too_big.status_code == 422

@@ -107,7 +107,10 @@ def get_refund(
 
 @router.get("/{refund_id}/history")
 def refund_history(
-    refund_id: int, user: User = Depends(current_user), session: Session = Depends(get_session)
+    refund_id: int,
+    params: PageParams = Depends(page_params),
+    user: User = Depends(current_user),
+    session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     POLICY.require(user, "refund.read")
     refund = service.get_scoped(session, user, refund_id)
@@ -118,6 +121,7 @@ def refund_history(
         record_type=RECORD_TYPE,
         record_id=refund.reference,
         workflow_actions=WORKFLOW_ACTIONS,
+        params=params,
     )
 
 
