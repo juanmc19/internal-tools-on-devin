@@ -69,7 +69,7 @@ export function Home() {
                     </div>
                   </dl>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="mt-auto">
                   {def ? (
                     <Button asChild variant="outline" size="sm">
                       <Link to={def.path}>
