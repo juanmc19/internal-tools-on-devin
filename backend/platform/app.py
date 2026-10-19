@@ -18,6 +18,7 @@ def create_app(settings: Settings, manifests: list[AppManifest], *, create_schem
     app.state.db = Database(settings.database_url)
     app.state.registry = Registry(manifests)
     app.state.audit_chain = audit.ChainVerifier()
+    app.state.refusals = audit.RefusalGate()
     if create_schema:
         app.state.db.create_schema()
 

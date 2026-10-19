@@ -1,7 +1,8 @@
 """Append-only, hash-chained audit log.
 
 Entries are written in the caller's transaction (`write`) so a failed change leaves no entry, except
-refusals (`record_refusal`) which get their own transaction because the refused change never commits.
+refusals (`record_refusal`) which get their own transaction because the refused change never commits;
+`RefusalGate` coalesces identical repeats. `ChainVerifier` serves the cached, incremental chain status.
 SQLite triggers block UPDATE and DELETE; `verify` recomputes the chain and names the first bad row.
 No personal data goes in here: ids, actions and diffs with masked fields reduced to {"changed": true}.
 """
@@ -12,6 +13,7 @@ import hashlib
 import json
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -188,6 +190,72 @@ def build_entry(
     )
 
 
+class RefusalGate:
+    """Coalesces repeated refusals so a caller cannot flood the append-only log (or the chain walk) with 403s.
+
+    The first refusal per (app, actor, code, record) in each `window` is written; identical ones inside the
+    window are counted and reported as `repeats` on the next entry for that key. Each actor also gets at
+    most `per_actor` written refusals per window; refusals over that budget are counted the same way.
+    """
+
+    def __init__(
+        self,
+        *,
+        window: float = 60.0,
+        per_actor: int = 30,
+        max_keys: int = 10_000,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.window = window
+        self.per_actor = per_actor
+        self.max_keys = max_keys
+        self._clock = clock
+        self._lock = threading.Lock()
+        # key -> [time last written (None if never), refusals not yet written]
+        self._keys: dict[tuple, list] = {}
+        self._actors: dict[str | None, deque[float]] = {}
+
+    def admit(self, key: tuple, actor_id: str | None) -> int | None:
+        """None to skip writing, or the number of earlier unwritten repeats to record with this one."""
+        with self._lock:
+            now = self._clock()
+            state = self._keys.get(key)
+            if state and state[0] is not None and now - state[0] < self.window:
+                state[1] += 1
+                return None
+            recent = self._actors.setdefault(actor_id, deque())
+            while recent and now - recent[0] >= self.window:
+                recent.popleft()
+            if len(recent) >= self.per_actor:
+                if state is None:
+                    self._remember(key, [None, 0])
+                    state = self._keys[key]
+                state[1] += 1
+                return None
+            recent.append(now)
+            repeats = state[1] if state else 0
+            self._keys.pop(key, None)
+            self._remember(key, [now, 0])
+            return repeats
+
+    def _remember(self, key: tuple, state: list) -> None:
+        if len(self._keys) >= self.max_keys:
+            now = self._clock()
+            for k in [
+                k
+                for k, (at, n) in self._keys.items()
+                if n == 0 and at is not None and now - at >= self.window
+            ]:
+                del self._keys[k]
+            for k in [
+                k for k, recent in self._actors.items() if not recent or now - recent[-1] >= self.window
+            ]:
+                del self._actors[k]
+            while len(self._keys) >= self.max_keys:
+                del self._keys[next(iter(self._keys))]
+        self._keys[key] = state
+
+
 def record_refusal(
     db: Database,
     *,
@@ -197,8 +265,12 @@ def record_refusal(
     record_type: str | None,
     record_id: str | None,
     request_id: str | None,
+    repeats: int = 0,
 ) -> None:
     """Records a 403 in its own transaction, independent of whatever the refused request rolled back."""
+    diff: dict[str, Any] = {"code": code}
+    if repeats:
+        diff["repeats"] = repeats
     with db.session() as session:
         write(
             session,
@@ -207,7 +279,7 @@ def record_refusal(
             action="security.denied",
             record_type=record_type,
             record_id=record_id,
-            diff={"code": code},
+            diff=diff,
             request_id=request_id,
         )
         session.commit()
