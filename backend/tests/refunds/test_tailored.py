@@ -252,3 +252,20 @@ def test_tlr3_goodwill_has_no_deadline(client, today):
     assert created["deadline_on"] is None and created["business_days_left"] is None
     for r in client.get("/refunds?type=goodwill&page_size=50", headers=as_user(INES)).json()["items"]:
         assert r["deadline_on"] is None and r["business_days_left"] is None
+
+
+@pytest.mark.parametrize(
+    ("as_of", "oldest_allowed"),
+    [
+        (date(2026, 2, 28), date(2024, 2, 28)),  # a leap day in between: 731 days, still two years
+        (date(2028, 2, 29), date(2026, 2, 28)),  # 29 Feb maps to 28 Feb two years earlier
+        (date(2026, 10, 1), date(2024, 10, 1)),
+    ],
+)
+def test_tlr1_two_year_limit_is_calendar_years_across_leap_days(client, monkeypatch, as_of, oldest_allowed):
+    monkeypatch.setattr(business_days, "today", lambda: as_of)
+    day_before = (oldest_allowed - timedelta(days=1)).isoformat()
+    too_old = client.post("/refunds", json=dispute(day_before), headers=as_user(GABRIELA))
+    assert too_old.status_code == 400 and too_old.json()["code"] == "REPORTED_ON_TOO_OLD"
+    ok = client.post("/refunds", json=dispute(oldest_allowed.isoformat()), headers=as_user(GABRIELA))
+    assert ok.status_code == 201

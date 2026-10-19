@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Check, Clock, Eye, EyeOff } from "lucide-react";
-import type { HistoryEntry } from "@/platform/api";
+import { appendPage, type HistoryEntry, type Page } from "@/platform/api";
 import { Button } from "@/platform/ui/button";
 import { Badge } from "@/platform/ui/badge";
 import {
@@ -44,7 +44,7 @@ export function RefundSheet({
 }) {
   const { me, can, nameOf, personaId } = usePersona();
   const [record, setRecord] = useState<Refund | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>();
+  const [history, setHistory] = useState<Page<HistoryEntry>>();
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
@@ -58,14 +58,21 @@ export function RefundSheet({
         getHistory(refundId),
       ]);
       setRecord(detail);
-      setHistory(hist.items);
+      setHistory(hist);
     } catch {
       setRecord(null);
-      setHistory([]);
+      setHistory({ items: [], total: 0, page: 1, page_size: 0 });
     } finally {
       setLoading(false);
     }
   }, [refundId]);
+
+  const loadMoreHistory = async () => {
+    if (refundId === null || !history) return;
+    const loaded = history;
+    const next = await getHistory(refundId, loaded.page + 1);
+    setHistory(appendPage(loaded, next));
+  };
 
   useEffect(() => {
     setRecord(null);
@@ -83,7 +90,7 @@ export function RefundSheet({
         `${label}: ${updated.reference} is now ${humanize(updated.status).toLowerCase()}.`,
       );
       onChanged();
-      setHistory((await getHistory(updated.id)).items);
+      setHistory(await getHistory(updated.id));
     } catch {
       // the API refusal is already on screen as a toast with its code; reload the record
       setConfirmReject(false);
@@ -179,9 +186,11 @@ export function RefundSheet({
         }
         loading={loading && !r}
         actions={actions}
-        history={history}
+        history={history?.items}
         historyLoading={history === undefined}
         historyOptions={HISTORY}
+        historyTotal={history?.total}
+        onLoadMoreHistory={loadMoreHistory}
       >
         {r && (
           <div className="space-y-6">

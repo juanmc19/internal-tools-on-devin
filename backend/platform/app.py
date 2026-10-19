@@ -16,10 +16,14 @@ from backend.platform.settings import Settings
 # In dev mode the API answers only requests addressed to this machine by name (blocks DNS rebinding).
 DEV_HOSTS = ["localhost", "127.0.0.1"]
 
-REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
+# Only a UUID (hex, with or without hyphens) is kept: free text could carry personal data into audit rows.
+REQUEST_ID_PATTERN = re.compile(
+    r"[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
+)
 
 
 def resolve_request_id(supplied: str | None) -> str:
+    """The client's X-Request-Id when it is a UUID, otherwise a fresh uuid4 hex."""
     if supplied is not None and REQUEST_ID_PATTERN.fullmatch(supplied):
         return supplied
     return uuid.uuid4().hex

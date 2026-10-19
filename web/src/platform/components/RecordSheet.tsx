@@ -24,6 +24,8 @@ export function RecordSheet({
   history,
   historyLoading,
   historyOptions,
+  historyTotal,
+  onLoadMoreHistory,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -36,6 +38,8 @@ export function RecordSheet({
   history?: HistoryEntry[];
   historyLoading?: boolean;
   historyOptions?: HistoryOptions;
+  historyTotal?: number;
+  onLoadMoreHistory?: () => Promise<void>;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -91,6 +95,8 @@ export function RecordSheet({
                 entries={history}
                 loading={historyLoading}
                 options={historyOptions}
+                total={historyTotal}
+                onLoadMore={onLoadMoreHistory}
               />
             </section>
           </>

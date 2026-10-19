@@ -139,7 +139,10 @@ def get_case(
 
 @router.get("/cases/{case_id}/history")
 def case_history(
-    case_id: int, user: User = Depends(current_user), session: Session = Depends(get_session)
+    case_id: int,
+    params: PageParams = Depends(page_params),
+    user: User = Depends(current_user),
+    session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     POLICY.require(user, "case.read")
     case = service.get_scoped(session, user, case_id)
@@ -150,6 +153,7 @@ def case_history(
         record_type=RECORD_TYPE,
         record_id=case.reference,
         workflow_actions=WORKFLOW_ACTIONS,
+        params=params,
     )
 
 

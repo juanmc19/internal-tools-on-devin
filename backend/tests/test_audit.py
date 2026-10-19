@@ -6,6 +6,8 @@ from sqlalchemy.exc import DatabaseError
 
 from backend.platform import audit
 from backend.platform.auth import RoleAssignment, User
+from backend.platform.errors import ApiError
+from backend.platform.paging import PageParams
 from backend.tests.conftest import as_user
 from backend.tests.testapp.app import Widget, rename_then_fail
 
@@ -248,3 +250,39 @@ def test_record_history_trims_oversight_entries_for_roles_without_audit_read(app
     entry = trimmed["items"][0]
     assert not {"request_id", "hash", "prev_hash"} & entry.keys()
     assert entry["actor_id"] == "manager_1" and entry["diff"]["status"]["to"] == "approved"
+
+
+def test_record_history_is_paged_with_an_exact_total(app):
+    from backend.tests.testapp.app import POLICY
+
+    manager = User(id="manager_1", name="M", roles={"testapp": RoleAssignment("testapp", "manager")})
+    viewer = User(id="viewer_north", name="V", roles={"testapp": RoleAssignment("testapp", "viewer")})
+    ref = "TEST-WID-000002"
+    with app.state.db.session() as session:
+        for i in range(60):
+            audit.write(
+                session,
+                app="testapp",
+                actor_id="manager_1",
+                action="widget.approve" if i % 2 else "widget.read_unmasked",
+                record_type="widget",
+                record_id=ref,
+                diff={"n": i},
+                request_id=f"req-{i}",
+            )
+        session.commit()
+        kwargs = {"record_type": "widget", "record_id": ref, "workflow_actions": ("widget.approve",)}
+        default = audit.record_history(session, POLICY, manager, **kwargs)
+        pages = [
+            audit.record_history(session, POLICY, manager, **kwargs, params=PageParams(page=n, page_size=25))
+            for n in (1, 2, 3)
+        ]
+        trimmed = audit.record_history(session, POLICY, viewer, **kwargs, params=PageParams(page_size=20))
+        with pytest.raises(ApiError) as bad_sort:
+            audit.record_history(session, POLICY, manager, **kwargs, params=PageParams(sort="actor_id"))
+    assert default["total"] == 60 and len(default["items"]) == 50 and default["page_size"] == 50
+    assert [len(p["items"]) for p in pages] == [25, 25, 10] and {p["total"] for p in pages} == {60}
+    assert [e["diff"]["n"] for p in pages for e in p["items"]] == list(range(60))
+    assert trimmed["total"] == 30 and len(trimmed["items"]) == 20
+    assert {e["action"] for e in trimmed["items"]} == {"widget.approve"}
+    assert bad_sort.value.code == "INVALID_SORT"

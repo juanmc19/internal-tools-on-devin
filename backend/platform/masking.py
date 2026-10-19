@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import date, datetime
 
@@ -22,15 +23,30 @@ def last4(value: object) -> object:
     return f"{MASK}{text[-4:]}" if len(text) > 4 else MASK
 
 
-def city_only(value: object) -> object:
-    """Keeps the last comma-separated component of an address ("12 Elm St, Austin" -> "Austin").
+# Words that start a unit or building component ("Apt 4", "Depto B"), never a city.
+UNIT_WORDS = frozenset(
+    "apt apartment apto apartamento depto dpto departamento suite ste unit fl floor piso andar room rm "
+    "bldg building bloco casa sala oficina interior int po box lote".split()
+)
+# A city is words of letters joined by spaces, dots, hyphens or apostrophes ("São Paulo", "St. John's").
+CITY_PATTERN = re.compile(r"[^\W\d_]+(?:[ .'\-]+[^\W\d_]+)*\.?")
 
-    Fails closed: without a separate city component the whole value is masked.
+
+def _looks_like_city(part: str) -> bool:
+    first_word = re.split(r"[ .'\-]", part, maxsplit=1)[0].lower()
+    return CITY_PATTERN.fullmatch(part) is not None and first_word not in UNIT_WORDS
+
+
+def city_only(value: object) -> object:
+    """Keeps the city, the last comma-separated component of an address ("12 Elm St, Austin" -> "Austin").
+
+    Fails closed: unless there is a separate last component that looks like a city (letters only, not a
+    unit such as "Apt 4"), the whole value is masked.
     """
     if value is None:
         return None
     parts = [p.strip() for p in str(value).split(",") if p.strip()]
-    return parts[-1] if len(parts) >= 2 else MASK
+    return parts[-1] if len(parts) >= 2 and _looks_like_city(parts[-1]) else MASK
 
 
 def day_only(value: object) -> object:
