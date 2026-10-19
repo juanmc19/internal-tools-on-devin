@@ -242,3 +242,15 @@ def test_seed_queue_total_filters_and_paging(big_client):
     assert search["total"] == 1 and search["items"][0]["reference"] == "TEST-RFD-001234"
     verify = big_client.get("/audit/verify?app=refunds", headers=as_user(ELENA)).json()
     assert verify["ok"] is True
+
+
+def test_agent_history_shows_only_workflow_steps(client):
+    assert post(client, LARGE_NE, "approve", INES).status_code == 200
+    assert post(client, LARGE_NE, "approve", INES).json()["code"] == "SOD_VIOLATION"
+    full = history(client, LARGE_NE, ELENA)
+    assert {"security.denied", "refund.approve"} <= {e["action"] for e in full}
+    assert all(e["hash"] and "request_id" in e for e in full)
+    trimmed = client.get(f"/refunds/{LARGE_NE}/history", headers=as_user(GABRIELA)).json()
+    assert trimmed["total"] == len(trimmed["items"])
+    assert {e["action"] for e in trimmed["items"]} == {"refund.approve"}
+    assert not any({"request_id", "hash", "prev_hash"} & e.keys() for e in trimmed["items"])
