@@ -30,6 +30,7 @@ def to_record(case: Case) -> dict[str, Any]:
         "date_of_birth": case.date_of_birth,
         "id_number": case.id_number,
         "address": case.address,
+        "city": case.city,
         "country": case.country,
         "risk": case.risk,
         "screening_result": case.screening_result,

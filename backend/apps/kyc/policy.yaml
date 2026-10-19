@@ -14,7 +14,7 @@ masking:
     standard:
       applicant_name: initials
       id_number: last4
-      address: city_only
+      address: redact
       date_of_birth: day_only
 roles:
   analyst:

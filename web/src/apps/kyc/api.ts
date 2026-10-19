@@ -17,6 +17,7 @@ export type KycCase = {
   date_of_birth: string;
   id_number: string;
   address: string;
+  city: string;
   country: string;
   risk: "low" | "medium" | "high";
   screening_result: "clear" | "possible_match" | "match";

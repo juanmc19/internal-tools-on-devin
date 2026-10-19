@@ -11,7 +11,8 @@ BR_CASE = 4
 def assert_masked(record: dict) -> None:
     assert record["applicant_name"] == "A. R."
     assert record["id_number"] == "••••6789"
-    assert record["address"] == "Ciudad de México"
+    assert record["address"] == "••••"
+    assert record["city"] == "Ciudad de México"
     assert record["date_of_birth"] == "••••-••-12"
     assert record["masked"] is True
 
@@ -31,7 +32,15 @@ def test_priv1_auditor_is_masked_and_queue_rows_are_masked_for_everyone(client):
 
 def test_priv1_no_full_pii_anywhere_in_an_analyst_page(client):
     body = client.get("/kyc/cases?page_size=200", headers=as_user(ANA)).text
-    for secret in ("Ana Ruiz", "MX123456789", "Av. Reforma", "1987-04-12", "Cy Diaz", "CO111222333"):
+    for secret in (
+        "Ana Ruiz",
+        "MX123456789",
+        "Av. Reforma",
+        "12 Av.",
+        "1987-04-12",
+        "Cy Diaz",
+        "CO111222333",
+    ):
         assert secret not in body
 
 

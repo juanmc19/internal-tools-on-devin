@@ -164,6 +164,7 @@ def seed(session: Session) -> None:
             "decided_at": None,
             "version": 1,
         }
+        row["city"] = row["address"].rsplit(", ", 1)[1]
         if status != "new":
             claimer = ANALYSTS.get(country) or rng.choice(REVIEWERS)
             if rng.random() < 0.3:
