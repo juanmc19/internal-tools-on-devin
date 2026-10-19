@@ -34,8 +34,9 @@ web/src/apps/<app>/      one folder per app: screens built only from web/src/pla
   diffs as `{"changed": true}`.
 - **Lists are server-side.** Paginate with the platform helper, sort only by allowlisted columns, return exact
   totals. Never return unbounded lists.
-- **Sign-in is a mock.** The `X-Dev-User` header works only when `APP_ENV=dev`; otherwise every authenticated
-  endpoint returns 401. Production would use Entra ID OIDC.
+- **Sign-in is a mock.** The `X-Dev-User` header works only when `APP_ENV=dev`, and then only from loopback with
+  Host `localhost` or `127.0.0.1`; otherwise every authenticated endpoint returns 401. Production would use Entra
+  ID OIDC.
 - **Stay in scope.** Build what the session prompt and `docs/ACCEPTANCE.md` ask for. If you think something else
   is needed, list it under "Follow-ups" in the PR instead of building it.
 

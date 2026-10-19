@@ -95,9 +95,14 @@ def app(tmp_path):
     return build_app(tmp_path)
 
 
+def local_client(app, client_host: str = "127.0.0.1") -> TestClient:
+    """A test client that calls the API the way `make run` is reached: from loopback, Host 127.0.0.1."""
+    return TestClient(app, base_url="http://127.0.0.1", client=(client_host, 50000))
+
+
 @pytest.fixture
 def client(app) -> Iterator[TestClient]:
-    with TestClient(app) as c:
+    with local_client(app) as c:
         yield c
 
 

@@ -12,6 +12,7 @@ from backend.apps.kyc.seed import PERSONAS, seed
 from backend.platform.app import create_app
 from backend.platform.auth import RoleAssignment, upsert_user
 from backend.platform.settings import Settings
+from backend.tests.conftest import local_client
 
 ANA, BRUNO, CAMILA, DIEGO, ELENA = (p[0] for p in PERSONAS)
 
@@ -107,7 +108,7 @@ def app(db_path):
 
 @pytest.fixture
 def client(app) -> Iterator[TestClient]:
-    with TestClient(app) as c:
+    with local_client(app) as c:
         yield c
 
 
@@ -122,7 +123,7 @@ def raw(db_path) -> Iterator[sqlite3.Connection]:
 def big_client(tmp_path_factory) -> Iterator[TestClient]:
     """The real 50,000-case seed, built once per module (about 3 s)."""
     app = build_app(tmp_path_factory.mktemp("big") / "kyc.db", full=True)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         yield c
 
 
