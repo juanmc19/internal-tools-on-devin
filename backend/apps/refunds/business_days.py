@@ -7,6 +7,7 @@ holidays as closed). Dates are ISO strings (YYYY-MM-DD) at the edges because tha
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from datetime import date, timedelta
 from functools import cache
 
@@ -80,15 +81,32 @@ def add_business_days(start: date, count: int) -> date:
     return day
 
 
+# The Gregorian calendar repeats every 400 years (146,097 days, a whole number of weeks) and so do the holiday
+# rules, so one cycle of holidays is enough to count business days between any two dates without a day loop.
+_CYCLE_DAYS = 146_097
+_CYCLE_START = date(2000, 1, 1).toordinal()
+
+
+@cache
+def _cycle_holidays() -> list[int]:
+    """Sorted day offsets from `_CYCLE_START` of the weekday holidays in one 400-year cycle."""
+    days = {d for year in range(1999, 2401) for d in federal_holidays(year) if d.weekday() < SATURDAY}
+    return sorted(o for o in (d.toordinal() - _CYCLE_START for d in days) if 0 <= o < _CYCLE_DAYS)
+
+
+def _business_days_through(ordinal: int) -> int:
+    """Business days up to and including the day `ordinal`, up to a constant (only differences matter)."""
+    weeks, rest = divmod(ordinal, 7)  # ordinal 1 (0001-01-01) is a Monday
+    weekdays = weeks * 5 + min(rest, 5)
+    holidays = _cycle_holidays()
+    cycles, offset = divmod(ordinal - _CYCLE_START, _CYCLE_DAYS)
+    return weekdays - cycles * len(holidays) - bisect_right(holidays, offset)
+
+
 def business_days_between(start: date, end: date) -> int:
-    """Business days in (start, end]; negative when `end` is before `start` (counts (end, start])."""
-    if end < start:
-        return -business_days_between(end, start)
-    count, day = 0, start
-    while day < end:
-        day += timedelta(days=1)
-        count += is_business_day(day)
-    return count
+    """Business days in (start, end]; negative when `end` is before `start` (counts (end, start]).
+    Constant time whatever the gap."""
+    return _business_days_through(end.toordinal()) - _business_days_through(start.toordinal())
 
 
 def deadline_for(reported_on: str | None) -> str | None:
