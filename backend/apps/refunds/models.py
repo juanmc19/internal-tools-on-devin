@@ -16,6 +16,7 @@ class Refund(Base):
     __table_args__ = (
         Index("ix_refunds_region_status", "region", "status"),
         Index("ix_refunds_status_created", "status", "created_at"),
+        Index("ix_refunds_status_deadline", "status", "deadline_on"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -26,6 +27,7 @@ class Refund(Base):
     type: Mapped[str] = mapped_column(String(8), index=True)
     reason: Mapped[str] = mapped_column(Text)
     reported_on: Mapped[str | None] = mapped_column(String(10))  # disputes: the day the customer reported it
+    deadline_on: Mapped[str | None] = mapped_column(String(10))  # disputes: reported_on + 10 business days
     region: Mapped[str] = mapped_column(String(16), index=True)
     status: Mapped[str] = mapped_column(String(24), index=True, default="requested")
     requester_id: Mapped[str] = mapped_column(String(64), index=True)

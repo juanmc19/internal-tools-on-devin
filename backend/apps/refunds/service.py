@@ -3,12 +3,14 @@ separation of duties, the change, its audit entry, commit. Nothing persists unle
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.apps.refunds import business_days
 from backend.apps.refunds.models import OPEN_STATUSES, REGIONS, TYPES, Refund, RefundApproval
 from backend.platform import audit
 from backend.platform.auth import User
@@ -30,6 +32,8 @@ def to_record(refund: Refund) -> dict[str, Any]:
         "type": refund.type,
         "reason": refund.reason,
         "reported_on": refund.reported_on,
+        "deadline_on": refund.deadline_on,
+        "business_days_left": business_days.business_days_left(refund.deadline_on),
         "region": refund.region,
         "status": refund.status,
         "requester_id": refund.requester_id,
@@ -122,6 +126,9 @@ def request(
         raise ApiError(400, "REPORTED_ON_REQUIRED", "A dispute needs the date the customer reported it.")
     if type == "goodwill":
         reported_on = None
+    elif date.fromisoformat(reported_on) > business_days.today():
+        raise ApiError(400, "REPORTED_ON_IN_FUTURE", "The report date cannot be in the future.")
+    deadline_on = business_days.deadline_for(reported_on)
     _check_region_in_scope(user, region)
     now = audit.now_iso()
     refund = Refund(
@@ -132,6 +139,7 @@ def request(
         type=type,
         reason=reason,
         reported_on=reported_on,
+        deadline_on=deadline_on,
         region=region,
         status="requested",
         requester_id=user.id,
@@ -153,6 +161,7 @@ def request(
             "amount_cents": {"from": None, "to": amount_cents},
             "type": {"from": None, "to": type},
             "region": {"from": None, "to": region},
+            "deadline_on": {"from": None, "to": deadline_on},
             "customer_name": {"changed": True},
             "card_last4": {"changed": True},
             "reason": {"changed": True},

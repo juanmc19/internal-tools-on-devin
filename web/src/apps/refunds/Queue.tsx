@@ -27,7 +27,7 @@ import {
   listRefunds,
   type Refund,
 } from "./api";
-import { RefundStatusBadge, TypeBadge } from "./badges";
+import { DeadlineBadge, RefundStatusBadge, TypeBadge } from "./badges";
 import { RefundSheet } from "./RefundSheet";
 import { NewRefundDialog } from "./NewRefundDialog";
 
@@ -127,6 +127,13 @@ export function Queue() {
       sortable: true,
       width: "110px",
       render: (r) => humanize(r.region),
+    },
+    {
+      key: "deadline_on",
+      header: "Reg E deadline",
+      sortable: true,
+      width: "200px",
+      render: (r) => <DeadlineBadge refund={r} />,
     },
     {
       key: "status",

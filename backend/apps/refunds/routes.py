@@ -23,6 +23,8 @@ SORT_COLUMNS = {
     "type": Refund.type,
     "region": Refund.region,
     "status": Refund.status,
+    # most urgent first; goodwill refunds have no deadline and sort after every dispute
+    "deadline_on": func.coalesce(Refund.deadline_on, "9999-12-31"),
     "created_at": Refund.created_at,
     "updated_at": Refund.updated_at,
 }

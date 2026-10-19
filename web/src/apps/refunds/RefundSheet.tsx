@@ -29,7 +29,8 @@ import {
   rejectRefund,
   type Refund,
 } from "./api";
-import { RefundStatusBadge, TypeBadge } from "./badges";
+import { DeadlineBadge, RefundStatusBadge, TypeBadge } from "./badges";
+import { formatDeadline } from "./deadline";
 import { HISTORY } from "./history";
 
 export function RefundSheet({
@@ -217,6 +218,18 @@ export function RefundSheet({
                 <Field
                   label="Reported by customer"
                   value={r.type === "dispute" ? formatDate(r.reported_on) : "—"}
+                />
+                <Field
+                  label="Reg E deadline"
+                  value={
+                    <span
+                      className="inline-flex flex-wrap items-center gap-2"
+                      data-testid="field-deadline"
+                    >
+                      {r.type === "dispute" && <span>{formatDeadline(r)}</span>}
+                      <DeadlineBadge refund={r} />
+                    </span>
+                  }
                 />
                 <Field label="Region" value={humanize(r.region)} />
                 <Field label="Requested by" value={nameOf(r.requester_id)} />

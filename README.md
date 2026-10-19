@@ -54,6 +54,10 @@ $1,000 and roughly 7% are above the $5,000 two-approver threshold. 300 paid refu
 entry per 1,000. Personas: Gabriela Soto (agent, northeast + southeast), Hugo Pérez (agent, midwest + west),
 Inés Castillo and Javier Ortiz (approvers), Karla Núñez (finance) and Elena Vega, who is the auditor in both
 Refunds and KYC. Agents see customer names as initials; the API stores only the last 4 digits of a card.
+Open refunds are dated relative to the day the seed runs, so the Reg E deadline column shows a realistic mix
+(a few overdue, some due within 2 business days, most with time left). The prototype tracks only the
+10-business-day Reg E deadline from the customer's report (weekends and US federal holidays excluded); it does not
+model the provisional-credit extension to 45 or 90 days or the customer's 60-day reporting window.
 
 Layout and conventions are in [AGENTS.md](AGENTS.md); the review checklist is [REVIEW.md](REVIEW.md).
 

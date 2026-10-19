@@ -20,6 +20,9 @@ export type Refund = {
   type: RefundType;
   reason: string;
   reported_on: string | null;
+  deadline_on: string | null;
+  /** Business days until the Reg E deadline: 0 is due today, negative is overdue, null for goodwill. */
+  business_days_left: number | null;
   region: string;
   status: RefundStatus;
   requester_id: string;

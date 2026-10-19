@@ -10,6 +10,11 @@ BENCHMARKS = [
     ),
     ("filter type=dispute&region=west", "TEST-USR-INES", "/refunds?type=dispute&region=west"),
     ("filter sort=amount desc", "TEST-USR-INES", "/refunds?sort=amount_cents&order=desc"),
+    (
+        "queue by Reg E deadline (most urgent first)",
+        "TEST-USR-INES",
+        "/refunds?status=requested,pending_second_approval&sort=deadline_on&order=asc",
+    ),
     ("search reference prefix", "TEST-USR-INES", "/refunds?q=TEST-RFD-0123"),
     ("count filtered", "TEST-USR-GABRIELA", "/refunds/count?status=requested"),
 ]
