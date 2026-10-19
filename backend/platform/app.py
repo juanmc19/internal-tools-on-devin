@@ -5,7 +5,7 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.platform import audit_routes, auth, health
+from backend.platform import audit, audit_routes, auth, health
 from backend.platform.db import Database
 from backend.platform.errors import install_error_handlers
 from backend.platform.registry import AppManifest, Registry
@@ -17,6 +17,7 @@ def create_app(settings: Settings, manifests: list[AppManifest], *, create_schem
     app.state.settings = settings
     app.state.db = Database(settings.database_url)
     app.state.registry = Registry(manifests)
+    app.state.audit_chain = audit.ChainVerifier()
     if create_schema:
         app.state.db.create_schema()
 

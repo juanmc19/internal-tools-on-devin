@@ -23,6 +23,18 @@ class Database:
         event.listen(self.engine, "connect", _sqlite_pragmas)
         event.listen(self.engine, "begin", _begin_immediate)
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False)
+        # Read-only work (health, audit views, verify) gets its own engine that opens deferred transactions,
+        # so it reads a WAL snapshot without taking the write lock that every writer queues on.
+        if url.startswith("sqlite:///") and not url.endswith(":memory:"):
+            self.read_engine: Engine = create_engine(
+                url, connect_args={"check_same_thread": False, "timeout": 30}
+            )
+            event.listen(self.read_engine, "connect", _sqlite_read_pragmas)
+            event.listen(self.read_engine, "begin", _begin_deferred)
+            self.ReadSessionLocal = sessionmaker(bind=self.read_engine, expire_on_commit=False)
+        else:
+            self.read_engine = self.engine
+            self.ReadSessionLocal = self.SessionLocal
 
     def create_schema(self) -> None:
         from backend.platform.audit import install_audit_triggers
@@ -32,6 +44,9 @@ class Database:
 
     def session(self) -> Session:
         return self.SessionLocal()
+
+    def read_session(self) -> Session:
+        return self.ReadSessionLocal()
 
 
 def _sqlite_pragmas(dbapi_conn, _record) -> None:
@@ -46,12 +61,33 @@ def _sqlite_pragmas(dbapi_conn, _record) -> None:
     cur.close()
 
 
+def _sqlite_read_pragmas(dbapi_conn, _record) -> None:
+    dbapi_conn.isolation_level = None
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA foreign_keys=ON")
+    cur.execute("PRAGMA query_only=ON")
+    cur.close()
+
+
 def _begin_immediate(conn) -> None:
     conn.exec_driver_sql("BEGIN IMMEDIATE")
 
 
+def _begin_deferred(conn) -> None:
+    conn.exec_driver_sql("BEGIN DEFERRED")
+
+
 def get_session(request: Request) -> Iterator[Session]:
     session = request.app.state.db.session()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def get_read_session(request: Request) -> Iterator[Session]:
+    """A session for routes that never write: deferred transaction, `query_only`, no write lock."""
+    session = request.app.state.db.read_session()
     try:
         yield session
     finally:

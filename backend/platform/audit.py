@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -218,10 +221,21 @@ def entries_for_record(app: str, record_type: str, record_id: str) -> Select:
 
 def verify(session: Session) -> dict[str, Any]:
     """Walks the whole chain in id order and reports the first entry whose hash or link does not match."""
-    prev = GENESIS
-    count = 0
+    result, _, _ = _walk(session, after_id=0, prev=GENESIS, count=0)
+    return result
+
+
+def _walk(session: Session, *, after_id: int, prev: str, count: int) -> tuple[dict[str, Any], int, str]:
+    """Checks entries with id > after_id, continuing from a chain already verified up to `prev`.
+
+    Returns the result plus the id and hash of the last good entry, so the next walk can resume there.
+    """
+    last_id = after_id
     for entry in session.execute(
-        select(AuditEntry).order_by(AuditEntry.id).execution_options(yield_per=1000)
+        select(AuditEntry)
+        .where(AuditEntry.id > after_id)
+        .order_by(AuditEntry.id)
+        .execution_options(yield_per=1000)
     ).scalars():
         count += 1
         expected = compute_hash(
@@ -236,8 +250,75 @@ def verify(session: Session) -> dict[str, Any]:
             prev_hash=entry.prev_hash,
         )
         if entry.prev_hash != prev:
-            return {"ok": False, "entries": count, "first_bad_id": entry.id, "reason": "broken link"}
+            return (
+                {"ok": False, "entries": count, "first_bad_id": entry.id, "reason": "broken link"},
+                last_id,
+                prev,
+            )
         if expected != entry.hash:
-            return {"ok": False, "entries": count, "first_bad_id": entry.id, "reason": "hash mismatch"}
+            return (
+                {"ok": False, "entries": count, "first_bad_id": entry.id, "reason": "hash mismatch"},
+                last_id,
+                prev,
+            )
         prev = entry.hash
-    return {"ok": True, "entries": count, "first_bad_id": None, "reason": None}
+        last_id = entry.id
+    return {"ok": True, "entries": count, "first_bad_id": None, "reason": None}, last_id, prev
+
+
+class ChainVerifier:
+    """Caches chain verification so public callers (the /health badge) never walk the whole log.
+
+    `status` checks only entries appended since the last good one, and re-walks the full chain at most once
+    every `full_interval` seconds (rows already verified can only change if someone drops the triggers).
+    `full` always walks everything; `/audit/verify` uses it and refreshes the cache. One walk runs at a time.
+    """
+
+    def __init__(self, *, full_interval: float = 300.0, clock: Callable[[], float] = time.monotonic) -> None:
+        self.full_interval = full_interval
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._result: dict[str, Any] | None = None
+        self._last_id = 0
+        self._last_hash = GENESIS
+        self._full_at: float | None = None
+
+    def full(self, session: Session) -> dict[str, Any]:
+        with self._lock:
+            return self._full(session)
+
+    def status(self, session: Session) -> dict[str, Any]:
+        """Cached result brought up to date incrementally; while another walk runs, the last result."""
+        if not self._lock.acquire(blocking=self._result is None):
+            return dict(self._result or {})
+        try:
+            if self._result is None or self._full_due():
+                return self._full(session)
+            if not self._result["ok"]:
+                return dict(self._result)
+            if not self._anchor_intact(session):
+                return self._full(session)
+            result, self._last_id, self._last_hash = _walk(
+                session, after_id=self._last_id, prev=self._last_hash, count=self._result["entries"]
+            )
+            self._result = result
+            return dict(result)
+        finally:
+            self._lock.release()
+
+    def _full_due(self) -> bool:
+        return self._full_at is None or self._clock() - self._full_at >= self.full_interval
+
+    def _anchor_intact(self, session: Session) -> bool:
+        # A reset database (e.g. `make seed` against a running API) restarts ids, so the cached tail is stale.
+        if self._last_id == 0:
+            return session.scalar(select(AuditEntry.id).limit(1)) is None
+        return (
+            session.scalar(select(AuditEntry.hash).where(AuditEntry.id == self._last_id)) == self._last_hash
+        )
+
+    def _full(self, session: Session) -> dict[str, Any]:
+        result, self._last_id, self._last_hash = _walk(session, after_id=0, prev=GENESIS, count=0)
+        self._result = result
+        self._full_at = self._clock()
+        return dict(result)
