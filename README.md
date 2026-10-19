@@ -108,4 +108,4 @@ The brief leaves these open. They shape the recommendation and should be checked
 ## How it was built
 
 `AGENTS.md` and `REVIEW.md` are the conventions Devin followed. The prompt for each session is in
-[docs/devin-sessions](docs/devin-sessions). Every change went through a PR with CI, Devin Review and my review.
+[docs/devin-sessions](docs/devin-sessions). Every change went through a PR with CI and a review before merge.
