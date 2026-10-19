@@ -1,0 +1,34 @@
+[project]
+name = "internal-tools-backend"
+version = "0.1.0"
+description = "Internal tools on one shared foundation: platform + apps"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<0.116",
+    "uvicorn[standard]>=0.30,<0.31",
+    "sqlalchemy>=2.0,<2.1",
+    "pyyaml>=6.0,<7",
+    "pydantic>=2.8,<3",
+    "httpx>=0.27,<0.28",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+    "ruff>=0.6,<0.7",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]  # FastAPI Depends()/Query() in defaults is the framework idiom
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.uv]
+package = false

@@ -13,7 +13,23 @@ cost is in [docs/RECEIPTS.md](docs/RECEIPTS.md).
 
 ## Run it
 
-Filled in by session 1.
+Needs Python 3.12 (via [uv](https://docs.astral.sh/uv/)) and Node 20.
+
+```sh
+make setup   # uv sync, npm ci, Playwright Chromium
+make seed    # recreate backend/data/app.db and seed every registered app
+make run     # API on http://127.0.0.1:8000 (APP_ENV=dev turns on the mock sign-in)
+make web     # web on http://127.0.0.1:5173 (proxies /api to :8000)
+```
+
+Then `make test` (pytest), `make lint` (ruff, eslint, tsc), `make e2e` (Playwright; starts both servers against
+a fresh seeded database), `make bench` (p95 for list, filter, search) and `make foundation-diff` (lines changed
+under `backend/platform/` and `web/src/platform/` against `main`).
+
+Sign-in is mocked: pick a persona in the top bar (marked DEV ONLY). The `X-Dev-User` header it sends is only
+honoured when `APP_ENV=dev`; every authenticated endpoint returns 401 otherwise. Personas are seeded by each app.
+
+Layout and conventions are in [AGENTS.md](AGENTS.md); the review checklist is [REVIEW.md](REVIEW.md).
 
 ## Real vs mocked
 
