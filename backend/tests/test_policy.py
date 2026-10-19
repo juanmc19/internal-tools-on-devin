@@ -117,3 +117,130 @@ def test_fnd2_two_distinct_approvals_above_threshold(client):
     # widget 1 is 500, one approval is enough
     one = client.post("/testapp/widgets/1/approve", headers=as_user("manager_1")).json()
     assert one["status"] == "approved"
+
+
+def _denied(client, **filters) -> list[dict]:
+    query = "&".join(f"{k}={v}" for k, v in filters.items())
+    url = f"/audit?app=testapp&action=security.denied&page_size=100&{query}"
+    return client.get(url, headers=as_user("manager_1")).json()["items"]
+
+
+def test_repeated_identical_refusals_are_coalesced(client, app):
+    """The same 403 hammered in a loop writes one entry per window; the next one carries the repeat count."""
+    now = [0.0]
+    app.state.refusals._clock = lambda: now[0]
+    for _ in range(20):
+        assert client.get("/audit?app=testapp", headers=as_user("viewer_north")).status_code == 403
+    entries = _denied(client, actor_id="viewer_north")
+    assert len(entries) == 1 and entries[0]["diff"] == {"code": "FORBIDDEN"}
+    now[0] = 61
+    client.get("/audit?app=testapp", headers=as_user("viewer_north"))
+    entries = _denied(client, actor_id="viewer_north")
+    assert len(entries) == 2 and entries[0]["diff"] == {"code": "FORBIDDEN", "repeats": 19}
+
+
+def test_distinct_refusals_are_each_recorded_up_to_a_per_actor_budget(app):
+    from backend.platform import audit
+
+    gate = audit.RefusalGate(window=60, per_actor=3, clock=lambda: 0.0)
+    admitted = [gate.admit(("testapp", "u1", "FORBIDDEN", "widget", str(i)), "u1") for i in range(5)]
+    assert admitted == [0, 0, 0, None, None]
+    assert gate.admit(("testapp", "u2", "FORBIDDEN", "widget", "0"), "u2") == 0
+
+
+def test_refusal_write_runs_off_the_event_loop(client, app, monkeypatch):
+    import asyncio
+
+    from backend.platform import audit
+
+    seen = []
+
+    def fake(*_args, **_kwargs):
+        try:
+            asyncio.get_running_loop()
+            seen.append("event loop")
+        except RuntimeError:
+            seen.append("worker thread")
+
+    monkeypatch.setattr(audit, "record_refusal", fake)
+    assert client.get("/audit?app=testapp", headers=as_user("viewer_north")).status_code == 403
+    assert seen == ["worker thread"]
+
+
+APPROVALS_BASE = {**BASE, "approvals": {"approve": {"distinct_from": ["requested_by"]}}}
+
+
+def _manifest(policy: Policy, model: type | None):
+    from dataclasses import replace
+
+    from backend.tests.testapp.app import MANIFEST
+
+    return replace(MANIFEST, key=policy.app, policy=policy, record_model=model)
+
+
+def test_fnd2_mistyped_approval_field_fails_closed_at_registration():
+    from backend.platform.registry import Registry
+    from backend.tests.testapp.app import Widget
+
+    typo = Policy.from_dict({**BASE, "approvals": {"approve": {"distinct_from": ["requestd_by"]}}})
+    with pytest.raises(PolicyError, match="'requestd_by' is not a field on Widget"):
+        Registry([_manifest(typo, Widget)])
+    bad_hop = Policy.from_dict(
+        {**BASE, "approvals": {"approve": {"distinct_from": ["approvals.aprover_id"]}}}
+    )
+    with pytest.raises(PolicyError, match="'approvals.aprover_id' is not a field"):
+        Registry([_manifest(bad_hop, Widget)])
+    count_typo = Policy.from_dict(
+        {
+            **BASE,
+            "approvals": {
+                "approve": {"count": {"rules": [{"when": {"field": "amout", "gt": 1}, "then": 2}]}}
+            },
+        }
+    )
+    with pytest.raises(PolicyError, match="'amout' is not a field"):
+        Registry([_manifest(count_typo, Widget)])
+    with pytest.raises(PolicyError, match="needs record_model"):
+        Registry([_manifest(Policy.from_dict(APPROVALS_BASE), None)])
+    Registry([_manifest(Policy.from_dict(APPROVALS_BASE), Widget)])
+    Registry([_manifest(POLICY, Widget)])
+
+
+def test_fnd2_mistyped_approval_field_fails_closed_at_request_time():
+    typo = Policy.from_dict({**BASE, "approvals": {"approve": {"distinct_from": ["requestd_by"]}}})
+    with pytest.raises(PolicyError, match="requestd_by"):
+        typo.check_separation("approve", "u1", {"requested_by": "u1"}, record_type="x", record_id="1")
+    count_typo = Policy.from_dict(
+        {
+            **BASE,
+            "approvals": {
+                "approve": {"count": {"rules": [{"when": {"field": "amout", "gt": 1}, "then": 2}]}}
+            },
+        }
+    )
+    with pytest.raises(PolicyError, match="amout"):
+        count_typo.required_approvals("approve", {"amount": 5})
+
+
+def test_fnd2_overlapping_count_rules_require_the_strictest_match():
+    tiers = [
+        {"when": {"field": "amount", "gt": 1000}, "then": 2},
+        {"when": {"field": "amount", "gt": 10000}, "then": 3},
+    ]
+    for rules in (tiers, list(reversed(tiers))):
+        policy = Policy.from_dict(
+            {**BASE, "approvals": {"approve": {"count": {"default": 1, "rules": rules}}}}
+        )
+        assert policy.required_approvals("approve", {"amount": 500}) == 1
+        assert policy.required_approvals("approve", {"amount": 5000}) == 2
+        assert policy.required_approvals("approve", {"amount": 60000}) == 3
+        assert not policy.approvals_complete("approve", {"amount": 60000}, ["a", "b"])
+        assert policy.approvals_complete("approve", {"amount": 60000}, ["a", "b", "c"])
+
+
+def test_fnd2_app_policies_pass_field_checks():
+    from backend.apps import MANIFESTS
+    from backend.platform.registry import Registry
+
+    Registry(MANIFESTS)
+    assert all(m.record_model is not None for m in MANIFESTS if m.policy.approvals)

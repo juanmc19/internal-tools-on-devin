@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.platform import audit
 from backend.platform.auth import User, current_user
-from backend.platform.db import get_session
+from backend.platform.db import get_read_session
 from backend.platform.paging import PageParams, page_params, paginate
 
 router = APIRouter(tags=["audit"])
@@ -30,7 +30,7 @@ def list_audit(
     actor_id: str | None = Query(None),
     params: PageParams = Depends(page_params),
     user: User = Depends(current_user),
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_read_session),
 ) -> dict[str, Any]:
     _authorize(request, user, app)
     stmt = select(audit.AuditEntry).where(audit.AuditEntry.app == app)
@@ -53,7 +53,7 @@ def verify_audit(
     request: Request,
     app: str = Query(...),
     user: User = Depends(current_user),
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_read_session),
 ) -> dict[str, Any]:
     _authorize(request, user, app)
-    return audit.verify(session)
+    return request.app.state.audit_chain.full(session)

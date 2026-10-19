@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from fastapi import APIRouter
 from sqlalchemy.orm import Session
 
-from backend.platform.policy import Policy
+from backend.platform.policy import Policy, PolicyError
 
 
 @dataclass(frozen=True)
@@ -23,10 +23,16 @@ class AppManifest:
     count_records: Callable[[Session], int]
     seed: Callable[[Session], None] | None = None
     record_type: str = "record"
+    record_model: type | None = None  # the model approval rules are checked against
 
 
 class Registry:
     def __init__(self, manifests: list[AppManifest]) -> None:
+        for m in manifests:
+            if m.policy.approvals:
+                if m.record_model is None:
+                    raise PolicyError(f"{m.key}: declares approval rules, so its manifest needs record_model")
+                m.policy.check_fields(m.record_model)
         self._apps = {m.key: m for m in manifests}
 
     def get(self, key: str) -> AppManifest | None:

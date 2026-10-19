@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
-import type { AuditEntry } from "@/platform/api";
+import type { HistoryEntry } from "@/platform/api";
 import { Button } from "@/platform/ui/button";
 import { Badge } from "@/platform/ui/badge";
 import { Label } from "@/platform/ui/label";
@@ -54,7 +54,7 @@ export function CaseSheet({
 }) {
   const { me, can, nameOf, personaId } = usePersona();
   const [record, setRecord] = useState<KycCase | null>(null);
-  const [history, setHistory] = useState<AuditEntry[]>();
+  const [history, setHistory] = useState<HistoryEntry[]>();
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending>(null);

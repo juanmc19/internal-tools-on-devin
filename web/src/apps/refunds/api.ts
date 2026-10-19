@@ -1,7 +1,7 @@
 import {
   api,
   qs,
-  type AuditEntry,
+  type HistoryEntry,
   type ListQuery,
   type Page,
 } from "@/platform/api";
@@ -73,7 +73,7 @@ export const listRefunds = (query: ListQuery) =>
   api<Page<Refund>>(`/refunds${qs(query)}`);
 export const getRefund = (id: number) => api<Refund>(`/refunds/${id}`);
 export const getHistory = (id: number) =>
-  api<{ items: AuditEntry[]; total: number }>(`/refunds/${id}/history`);
+  api<{ items: HistoryEntry[]; total: number }>(`/refunds/${id}/history`);
 export const createRefund = (body: NewRefund) =>
   api<Refund>("/refunds", { method: "POST", body });
 export const approveRefund = (id: number, version: number) =>

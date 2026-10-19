@@ -1,7 +1,7 @@
 import {
   api,
   qs,
-  type AuditEntry,
+  type HistoryEntry,
   type ListQuery,
   type Page,
 } from "@/platform/api";
@@ -52,7 +52,7 @@ export const listCases = (query: ListQuery) =>
   api<Page<KycCase>>(`/kyc/cases${qs(query)}`);
 export const getCase = (id: number) => api<KycCase>(`/kyc/cases/${id}`);
 export const getHistory = (id: number) =>
-  api<{ items: AuditEntry[]; total: number }>(`/kyc/cases/${id}/history`);
+  api<{ items: HistoryEntry[]; total: number }>(`/kyc/cases/${id}/history`);
 export const claimCase = (id: number, version: number) =>
   api<KycCase>(`/kyc/cases/${id}/claim`, { method: "POST", body: { version } });
 export const recommendCase = (

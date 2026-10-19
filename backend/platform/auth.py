@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy import ForeignKey, String, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
-from backend.platform.db import Base, get_session
+from backend.platform.db import Base, get_read_session
 from backend.platform.errors import ApiError
 
 
@@ -80,7 +80,7 @@ def require_dev_mode(request: Request) -> None:
 
 def current_user(
     request: Request,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_read_session),
     x_dev_user: str | None = Header(default=None, alias="X-Dev-User"),
 ) -> User:
     require_dev_mode(request)
@@ -145,7 +145,7 @@ def me(request: Request, user: User = Depends(current_user)) -> dict[str, Any]:
 
 
 @router.get("/dev/users")
-def dev_users(request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def dev_users(request: Request, session: Session = Depends(get_read_session)) -> dict[str, Any]:
     require_dev_mode(request)
     rows = session.scalars(select(UserRow).order_by(UserRow.id)).all()
     return {"items": [_describe(request, _to_user(row)) for row in rows]}
