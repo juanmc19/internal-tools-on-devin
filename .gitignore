@@ -1,0 +1,18 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+backend/data/
+# node
+node_modules/
+web/dist/
+web/.vite/
+web/test-results/
+web/playwright-report/
+web/blob-report/
+web/playwright/.cache/
+# misc
+.DS_Store
+.env
