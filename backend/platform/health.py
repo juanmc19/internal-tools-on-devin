@@ -5,16 +5,15 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from backend.platform import audit
-from backend.platform.db import get_session
+from backend.platform.db import get_read_session
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-def health(request: Request, session: Session = Depends(get_session)) -> dict[str, Any]:
+def health(request: Request, session: Session = Depends(get_read_session)) -> dict[str, Any]:
     registry = request.app.state.registry
-    chain = audit.verify(session)
+    chain = request.app.state.audit_chain.status(session)
     apps = []
     for manifest in registry.all():
         apps.append(

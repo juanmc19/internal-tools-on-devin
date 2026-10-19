@@ -143,6 +143,78 @@ def test_fnd3_concurrent_writers_keep_one_unbroken_chain(app):
         assert next_prev == prev_hash
 
 
+def _touch(app, n: int) -> None:
+    with app.state.db.session() as session:
+        for i in range(n):
+            audit.write(session, app="testapp", actor_id="manager_1", action="widget.touch", record_id=str(i))
+        session.commit()
+
+
+def test_health_reads_without_waiting_for_the_write_lock(client, app):
+    """/health is public, so it must never queue behind (or hold) the SQLite write lock."""
+    import time
+
+    _touch(app, 3)
+    with app.state.db.engine.connect() as writer:
+        writer.begin()  # BEGIN IMMEDIATE: another request holding the write lock mid-transaction
+        started = time.perf_counter()
+        health = client.get("/health").json()
+        elapsed = time.perf_counter() - started
+        writer.rollback()
+    assert health["audit"] == {"entries": 3, "chain_ok": True}
+    assert elapsed < 5
+
+
+def test_read_sessions_cannot_write(app):
+    with app.state.db.read_session() as session:
+        with pytest.raises(DatabaseError, match="readonly"):
+            session.execute(text("UPDATE test_widgets SET status = 'x'"))
+
+
+def test_chain_status_is_cached_and_incremental(app):
+    """Repeated /health calls only check entries appended since the last good one; a full re-walk runs at
+    most once per interval, and /audit/verify (full) always walks everything and refreshes the cache."""
+    now = [0.0]
+    verifier = audit.ChainVerifier(full_interval=60, clock=lambda: now[0])
+    _touch(app, 3)
+    with app.state.db.read_session() as session:
+        assert verifier.status(session)["entries"] == 3
+    _touch(app, 2)
+    with app.state.db.read_session() as session:
+        assert verifier.status(session) == {"ok": True, "entries": 5, "first_bad_id": None, "reason": None}
+
+    with app.state.db.engine.begin() as conn:
+        conn.execute(text("DROP TRIGGER audit_entries_no_update"))
+        conn.execute(text("UPDATE audit_entries SET actor_id = 'manager_2' WHERE id = 2"))
+    with app.state.db.read_session() as session:
+        assert (
+            verifier.status(session)["ok"] is True
+        )  # already-verified rows are re-checked on the next full walk
+    now[0] = 61
+    with app.state.db.read_session() as session:
+        result = verifier.status(session)
+    assert result["ok"] is False and result["first_bad_id"] == 2
+
+    fresh = audit.ChainVerifier(full_interval=60, clock=lambda: 0.0)
+    with app.state.db.read_session() as session:
+        fresh.status(session)
+        assert fresh.full(session)["first_bad_id"] == 2
+        assert fresh.status(session)["ok"] is False
+
+
+def test_chain_status_rewalks_after_the_database_is_reset(app):
+    verifier = audit.ChainVerifier(full_interval=3600, clock=lambda: 0.0)
+    _touch(app, 4)
+    with app.state.db.read_session() as session:
+        assert verifier.status(session)["entries"] == 4
+    with app.state.db.engine.begin() as conn:
+        conn.execute(text("DROP TRIGGER audit_entries_no_delete"))
+        conn.execute(text("DELETE FROM audit_entries"))
+    _touch(app, 1)
+    with app.state.db.read_session() as session:
+        assert verifier.status(session) == {"ok": True, "entries": 1, "first_bad_id": None, "reason": None}
+
+
 def test_record_history_trims_oversight_entries_for_roles_without_audit_read(app):
     from backend.tests.testapp.app import POLICY
 

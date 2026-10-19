@@ -3,13 +3,15 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 
 class ApiError(Exception):
     """A refusal or failure the API returns as `{"code", "message"}`.
 
-    403s are recorded in the audit log (in their own transaction) by the error handler,
-    so every refusal is both visible to the caller and kept for oversight.
+    403s are recorded in the audit log (in their own transaction, off the event loop) by the error handler,
+    so every refusal is both visible to the caller and kept for oversight. Identical repeats are coalesced
+    by `audit.RefusalGate` and counted on the next entry instead of each adding a row.
     """
 
     def __init__(
@@ -36,21 +38,27 @@ def not_found(record_type: str = "record") -> ApiError:
 
 
 def install_error_handlers(app: FastAPI) -> None:
-    from backend.platform.audit import record_refusal
+    from backend.platform import audit
 
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
         if exc.status == 403:
             user = getattr(request.state, "user", None)
-            record_refusal(
-                request.app.state.db,
-                app=exc.app,
-                actor_id=user.id if user else None,
-                code=exc.code,
-                record_type=exc.record_type,
-                record_id=exc.record_id,
-                request_id=getattr(request.state, "request_id", None),
-            )
+            actor_id = user.id if user else None
+            key = (exc.app, actor_id, exc.code, exc.record_type, exc.record_id)
+            repeats = request.app.state.refusals.admit(key, actor_id)
+            if repeats is not None:
+                await run_in_threadpool(
+                    audit.record_refusal,
+                    request.app.state.db,
+                    app=exc.app,
+                    actor_id=actor_id,
+                    code=exc.code,
+                    record_type=exc.record_type,
+                    record_id=exc.record_id,
+                    request_id=getattr(request.state, "request_id", None),
+                    repeats=repeats,
+                )
         return JSONResponse(status_code=exc.status, content={"code": exc.code, "message": exc.message})
 
     @app.exception_handler(RequestValidationError)
