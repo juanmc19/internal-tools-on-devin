@@ -29,6 +29,22 @@ under `backend/platform/` and `web/src/platform/` against `main`).
 Sign-in is mocked: pick a persona in the top bar (marked DEV ONLY). The `X-Dev-User` header it sends is only
 honoured when `APP_ENV=dev`; every authenticated endpoint returns 401 otherwise. Personas are seeded by each app.
 
+### KYC seed data and audit history
+
+`make seed` creates 50,000 synthetic KYC cases (`TEST-KYC-000001` … `TEST-KYC-050000`) across MX, CO, BR, AR,
+CL and PE in about 3 seconds, plus five personas: Ana Ruiz (analyst, MX + CO), Bruno Lima (analyst, BR + AR),
+Camila Torres and Diego Marín (senior reviewers) and Elena Vega (auditor). The seed is deterministic.
+
+Audit history is seeded in two tiers so the demo shows real timelines without 150,000 synthetic entries:
+
+- **200 decided cases carry a full chained history**: `case.claim`, `case.recommend` and `case.decide` entries with
+  the actors and timestamps that match the case, hash-chained like every other entry.
+- **Every other case is covered by one `seed.import` audit entry per 1,000 cases** (50 entries), whose diff records
+  the range and count imported.
+
+Everything created after seeding (claims, recommendations, decisions, unmasked reads, refusals) is audited live,
+so `GET /audit/verify` covers the seed and the demo in one chain.
+
 Layout and conventions are in [AGENTS.md](AGENTS.md); the review checklist is [REVIEW.md](REVIEW.md).
 
 ## Real vs mocked
