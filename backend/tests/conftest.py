@@ -81,6 +81,7 @@ def build_app(tmp_path, env: str = "dev"):
                     owner_name=owner,
                     id_number=idn,
                     address=addr,
+                    city=addr.rsplit(", ", 1)[-1],
                     born_on=born,
                     amount=amount,
                     requested_by=req,
