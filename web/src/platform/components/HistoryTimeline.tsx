@@ -1,20 +1,26 @@
-import type { AuditEntry } from "@/platform/api"
-import { actionLabel, formatDateTime } from "@/platform/format"
-import { summarizeDiff } from "@/platform/components/diff"
-import { usePersona } from "@/platform/persona"
-import { Skeleton } from "@/platform/ui/skeleton"
-import { cn } from "@/platform/lib/utils"
+import type { AuditEntry } from "@/platform/api";
+import { actionLabel, formatDateTime } from "@/platform/format";
+import { summarizeDiff, type HistoryOptions } from "@/platform/components/diff";
+import { usePersona } from "@/platform/persona";
+import { Skeleton } from "@/platform/ui/skeleton";
+import { cn } from "@/platform/lib/utils";
 
 export function HistoryTimeline({
   entries,
   loading,
   className,
+  options,
 }: {
-  entries: AuditEntry[] | undefined
-  loading?: boolean
-  className?: string
+  entries: AuditEntry[] | undefined;
+  loading?: boolean;
+  className?: string;
+  options?: HistoryOptions;
 }) {
-  const { nameOf } = usePersona()
+  const { nameOf } = usePersona();
+  const diffOptions: HistoryOptions = {
+    resolve: (value) => nameOf(value),
+    ...options,
+  };
   if (loading && !entries) {
     return (
       <div className={cn("space-y-3", className)}>
@@ -22,15 +28,22 @@ export function HistoryTimeline({
           <Skeleton key={i} className="h-10 w-full" />
         ))}
       </div>
-    )
+    );
   }
   if (!entries || entries.length === 0) {
-    return <p className={cn("text-sm text-muted-foreground", className)}>No history yet.</p>
+    return (
+      <p className={cn("text-sm text-muted-foreground", className)}>
+        No history yet.
+      </p>
+    );
   }
   return (
-    <ol className={cn("relative space-y-0 border-l pl-4", className)} data-testid="history-timeline">
+    <ol
+      className={cn("relative space-y-0 border-l pl-4", className)}
+      data-testid="history-timeline"
+    >
       {entries.map((entry) => {
-        const denied = entry.action === "security.denied"
+        const denied = entry.action === "security.denied";
         return (
           <li key={entry.id} className="relative pb-4 last:pb-0">
             <span
@@ -41,21 +54,28 @@ export function HistoryTimeline({
             />
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-sm font-medium">
-                {denied ? `Refused · ${String(entry.diff.code ?? "")}` : actionLabel(entry.action)}
+                {denied
+                  ? `Refused · ${String(entry.diff.code ?? "")}`
+                  : (options?.actions?.[entry.action] ??
+                    actionLabel(entry.action))}
               </p>
-              <time className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatDateTime(entry.ts)}</time>
+              <time className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {formatDateTime(entry.ts)}
+              </time>
             </div>
-            <p className="text-xs text-muted-foreground">{nameOf(entry.actor_id)}</p>
+            <p className="text-xs text-muted-foreground">
+              {nameOf(entry.actor_id)}
+            </p>
             {!denied
-              ? summarizeDiff(entry.diff).map((line) => (
+              ? summarizeDiff(entry.diff, diffOptions).map((line) => (
                   <p key={line} className="text-xs text-muted-foreground">
                     {line}
                   </p>
                 ))
               : null}
           </li>
-        )
+        );
       })}
     </ol>
-  )
+  );
 }

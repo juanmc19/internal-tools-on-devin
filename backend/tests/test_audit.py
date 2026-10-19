@@ -98,3 +98,46 @@ def test_audit_entries_hold_no_personal_data(client, app):
     blob = " ".join(f"{r.diff} {r.record_id} {r.actor_id}" for r in rows)
     for pii in ["Ana Ruiz", "AB1234567", "Elm Street", "1987-04-12"]:
         assert pii not in blob
+
+
+def test_fnd3_concurrent_writers_keep_one_unbroken_chain(app):
+    """Writers in parallel threads each read the last hash inside a BEGIN IMMEDIATE transaction, so the chain
+    never forks: every entry's prev_hash is the hash of the entry before it and verify() stays ok."""
+    import threading
+
+    from backend.platform import audit
+
+    threads, per_thread, errors = 8, 25, []
+
+    def worker(n: int) -> None:
+        try:
+            for i in range(per_thread):
+                with app.state.db.session() as session:
+                    audit.write(
+                        session,
+                        app="testapp",
+                        actor_id=f"thread-{n}",
+                        action="widget.touch",
+                        record_id=f"TEST-WID-{n:02d}{i:04d}",
+                    )
+                    session.commit()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    workers = [threading.Thread(target=worker, args=(n,)) for n in range(threads)]
+    for t in workers:
+        t.start()
+    for t in workers:
+        t.join()
+    assert errors == []
+
+    with app.state.db.session() as session:
+        result = audit.verify(session)
+        rows = session.execute(
+            select(audit.AuditEntry.prev_hash, audit.AuditEntry.hash).order_by(audit.AuditEntry.id)
+        ).all()
+    assert result["ok"] is True
+    assert len(rows) >= threads * per_thread
+    assert len({h for _, h in rows}) == len(rows)
+    for (_, prev_hash), (next_prev, _) in zip(rows, rows[1:], strict=False):
+        assert next_prev == prev_hash

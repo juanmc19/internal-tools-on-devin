@@ -19,8 +19,9 @@ class Database:
     def __init__(self, url: str) -> None:
         if url.startswith("sqlite:///") and not url.endswith(":memory:"):
             Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
-        self.engine: Engine = create_engine(url, connect_args={"check_same_thread": False})
+        self.engine: Engine = create_engine(url, connect_args={"check_same_thread": False, "timeout": 30})
         event.listen(self.engine, "connect", _sqlite_pragmas)
+        event.listen(self.engine, "begin", _begin_immediate)
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     def create_schema(self) -> None:
@@ -34,11 +35,19 @@ class Database:
 
 
 def _sqlite_pragmas(dbapi_conn, _record) -> None:
+    # pysqlite only issues BEGIN at the first INSERT/UPDATE, so a transaction that reads the last audit hash
+    # and then inserts could interleave with another writer. Disable its implicit transactions and open every
+    # transaction ourselves with BEGIN IMMEDIATE (write lock from the start; concurrent writers queue up).
+    dbapi_conn.isolation_level = None
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA foreign_keys=ON")
     cur.execute("PRAGMA synchronous=NORMAL")
     cur.close()
+
+
+def _begin_immediate(conn) -> None:
+    conn.exec_driver_sql("BEGIN IMMEDIATE")
 
 
 def get_session(request: Request) -> Iterator[Session]:
