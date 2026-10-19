@@ -184,4 +184,5 @@ MANIFEST = AppManifest(
     web_path="/testapp",
     count_records=count_records,
     record_type="widget",
+    record_model=Widget,
 )

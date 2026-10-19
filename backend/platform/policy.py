@@ -2,7 +2,8 @@
 `policy.yaml`; routes and services call `require`, `scoped`, `mask` and the approval checks.
 
 Everything fails closed: an undeclared permission or role is refused, a role without a scope cannot
-load, and a user with no role in the app gets nothing.
+load, a user with no role in the app gets nothing, and an approval rule naming a field the record does not
+have is refused at registration (`check_fields`) and again at request time.
 """
 
 from __future__ import annotations
@@ -12,7 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from sqlalchemy import Select, false
+from sqlalchemy import Select, false, inspect
+from sqlalchemy.exc import NoInspectionAvailable
 
 from backend.platform import masking
 from backend.platform.auth import User
@@ -118,17 +120,23 @@ class Policy:
             rules = []
             for rule in count.get("rules") or []:
                 when = rule.get("when") or {}
-                if "field" not in when or "gt" not in when or "then" not in rule:
+                if not when.get("field") or "gt" not in when or "then" not in rule:
                     raise PolicyError(
                         f"{app}: approval '{step}' count rule needs when.field, when.gt and then"
                     )
                 rules.append(
                     CountRule(field=str(when["field"]), gt=float(when["gt"]), count=int(rule["then"]))
                 )
+            distinct_from = tuple(str(p) for p in adef.get("distinct_from") or [])
+            if any(not p for p in distinct_from):
+                raise PolicyError(f"{app}: approval '{step}' has an empty distinct_from path")
+            default_count = int(count.get("default", 1))
+            if default_count < 1 or any(r.count < 1 for r in rules):
+                raise PolicyError(f"{app}: approval '{step}' counts must be at least 1")
             approvals[step] = ApprovalRule(
                 step=step,
-                distinct_from=tuple(str(p) for p in adef.get("distinct_from") or []),
-                default_count=int(count.get("default", 1)),
+                distinct_from=distinct_from,
+                default_count=default_count,
                 count_rules=tuple(rules),
             )
 
@@ -225,6 +233,15 @@ class Policy:
 
     # ---- approvals / separation of duties --------------------------------------------------------
 
+    def check_fields(self, model: type) -> None:
+        """Fails closed at registration: every distinct_from and count-rule path must exist on `model`
+        (following relationships for dotted paths), so a typo cannot silently turn a control off."""
+        for rule in self.approvals.values():
+            for path in rule.distinct_from:
+                _check_path(self.app, rule.step, model, path)
+            for count_rule in rule.count_rules:
+                _check_path(self.app, rule.step, model, count_rule.field)
+
     def approval(self, step: str) -> ApprovalRule:
         rule = self.approvals.get(step)
         if rule is None:
@@ -237,7 +254,7 @@ class Policy:
         """Refuses when the actor already acted in one of the steps the rule says they must differ from."""
         rule = self.approval(step)
         for path in rule.distinct_from:
-            for earlier in _resolve(record, path):
+            for earlier in self._resolve(step, record, path):
                 if earlier is not None and str(earlier) == actor_id:
                     label = path.split(".")[0].replace("_", " ")
                     raise ApiError(
@@ -250,27 +267,58 @@ class Policy:
                     )
 
     def required_approvals(self, step: str, record: Any) -> int:
+        """The strictest count among the default and every matching rule, whatever their order."""
         rule = self.approval(step)
+        required = rule.default_count
         for count_rule in rule.count_rules:
-            values = _resolve(record, count_rule.field)
-            value = values[0] if values else None
-            if value is not None and float(value) > count_rule.gt:
-                return count_rule.count
-        return rule.default_count
+            values = [v for v in self._resolve(step, record, count_rule.field) if v is not None]
+            if any(float(v) > count_rule.gt for v in values):
+                required = max(required, count_rule.count)
+        return required
 
     def approvals_complete(self, step: str, record: Any, approver_ids: list[str]) -> bool:
         return len(set(approver_ids)) >= self.required_approvals(step, record)
 
+    def _resolve(self, step: str, obj: Any, path: str) -> list[Any]:
+        try:
+            return _resolve(obj, path)
+        except KeyError as exc:
+            raise PolicyError(
+                f"{self.app}: approval '{step}' path '{path}' has no field {exc.args[0]!r} on the record"
+            ) from None
+
+
+def _check_path(app: str, step: str, model: type, path: str) -> None:
+    """Every part of `path` but the last must be a relationship on the mapped model, the last a column."""
+    current = model
+    *hops, leaf = path.split(".")
+    try:
+        for part in hops:
+            current = inspect(current).relationships[part].mapper.class_
+        if leaf in inspect(current).column_attrs:
+            return
+    except (KeyError, NoInspectionAvailable):
+        pass
+    raise PolicyError(f"{app}: approval '{step}' path '{path}' is not a field on {model.__name__}")
+
 
 def _resolve(obj: Any, path: str) -> list[Any]:
-    """Resolves a dotted path on a dict or object; list values fan out ("approvals.approver_id")."""
+    """Resolves a dotted path on a dict or object; list values fan out ("approvals.approver_id").
+    A missing field raises KeyError instead of reading as None, so the caller can fail closed."""
     current: list[Any] = [obj]
     for part in path.split("."):
         nxt: list[Any] = []
         for item in current:
             if item is None:
                 continue
-            value = item.get(part) if isinstance(item, dict) else getattr(item, part, None)
+            if isinstance(item, dict):
+                if part not in item:
+                    raise KeyError(part)
+                value = item[part]
+            elif hasattr(item, part):
+                value = getattr(item, part)
+            else:
+                raise KeyError(part)
             if isinstance(value, list | tuple | set):
                 nxt.extend(value)
             else:
