@@ -13,10 +13,14 @@ async function switchPersona(page: Page, id: string) {
 }
 
 async function openNewCase(page: Page): Promise<string> {
+  const filtered = page.waitForResponse(
+    (r) => r.url().includes("/kyc/cases?") && r.url().includes("status=new"),
+  );
   await page.getByTestId("filter-status").click();
   await page.getByRole("option", { name: "New" }).click();
-  await expect(page.getByTestId("table-range")).toContainText(/of [\d,]+/);
+  await filtered;
   const row = page.locator("[data-testid^='kyc-row-']").first();
+  await expect(row).toContainText("New");
   const reference = (await row.getAttribute("data-testid"))!.replace(
     "kyc-row-",
     "",
