@@ -45,6 +45,16 @@ Audit history is seeded in two tiers so the demo shows real timelines without 15
 Everything created after seeding (claims, recommendations, decisions, unmasked reads, refusals) is audited live,
 so `GET /audit/verify` covers the seed and the demo in one chain.
 
+### Refunds seed data and personas
+
+`make seed` also creates 20,000 synthetic refunds (`TEST-RFD-000001` … `TEST-RFD-020000`) across four US regions
+(northeast, southeast, midwest, west) in about 1.5 seconds: about a third are disputes, most amounts are under
+$1,000 and roughly 7% are above the $5,000 two-approver threshold. 300 paid refunds carry a full chained history
+(`refund.request`, one or two `refund.approve`, `refund.pay`); every other refund is covered by one `seed.import`
+entry per 1,000. Personas: Gabriela Soto (agent, northeast + southeast), Hugo Pérez (agent, midwest + west),
+Inés Castillo and Javier Ortiz (approvers), Karla Núñez (finance) and Elena Vega, who is the auditor in both
+Refunds and KYC. Agents see customer names as initials; the API stores only the last 4 digits of a card.
+
 Layout and conventions are in [AGENTS.md](AGENTS.md); the review checklist is [REVIEW.md](REVIEW.md).
 
 ## Real vs mocked

@@ -1,6 +1,7 @@
 """App registration, outside the foundation. Add a manifest here; API, seed, health and audit pick it up."""
 
 from backend.apps.kyc.app import MANIFEST as KYC
+from backend.apps.refunds.app import MANIFEST as REFUNDS
 from backend.platform.registry import AppManifest
 
-MANIFESTS: list[AppManifest] = [KYC]
+MANIFESTS: list[AppManifest] = [KYC, REFUNDS]
