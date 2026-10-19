@@ -155,6 +155,17 @@ export function Queue() {
         ),
     },
     {
+      key: "created_at",
+      header: "Created",
+      sortable: true,
+      width: "170px",
+      render: (c) => (
+        <span className="text-muted-foreground">
+          {formatDateTime(c.created_at)}
+        </span>
+      ),
+    },
+    {
       key: "updated_at",
       header: "Updated",
       sortable: true,
@@ -189,6 +200,7 @@ export function Queue() {
         placeholder="Status"
         options={STATUSES}
         leading={[{ value: OPEN, label: "Open · new, in review, recommended" }]}
+        className="w-56"
       />
       <FilterSelect
         testId="filter-country"
@@ -263,6 +275,7 @@ function FilterSelect({
   placeholder,
   options,
   leading = [],
+  className,
 }: {
   testId: string;
   value: string;
@@ -270,10 +283,15 @@ function FilterSelect({
   placeholder: string;
   options: readonly string[];
   leading?: { value: string; label: string }[];
+  className?: string;
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger data-testid={testId} className="w-40" size="sm">
+      <SelectTrigger
+        data-testid={testId}
+        className={className ?? "w-40"}
+        size="sm"
+      >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
