@@ -17,7 +17,7 @@ Each claim the prototype makes, the tests that prove it, and the step that shows
 
 | Id | Criterion | Proven by |
 |---|---|---|
-| PRIV-1 | An analyst sees applicants' names as initials, ID numbers as the last 4 digits and addresses as city only, in every response | pytest |
+| PRIV-1 | An analyst sees applicants' names as initials, ID numbers as the last 4 digits and street addresses fully masked (the city is its own field), in every response | pytest |
 | PRIV-2 | An analyst sees only cases in their assigned countries; another country's case returns 404, and lists and counts exclude it | pytest |
 | PRIV-3 | An analyst asking for unmasked data gets 403 `PII_MASKED_FOR_ROLE`; a senior reviewer's unmasked read writes an audit entry | pytest |
 

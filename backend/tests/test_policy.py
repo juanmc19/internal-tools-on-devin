@@ -81,7 +81,7 @@ def test_fnd2_masking_by_role_in_every_response(client):
     masked = client.get("/testapp/widgets/1", headers=as_user("viewer_north")).json()
     assert masked["owner_name"] == "A. R."
     assert masked["id_number"] == "\u2022\u2022\u2022\u20224567"
-    assert masked["address"] == "Austin"
+    assert masked["address"] == "\u2022\u2022\u2022\u2022" and masked["city"] == "Austin"
     assert masked["born_on"] == "\u2022\u2022\u2022\u2022-\u2022\u2022-12"
     listed = client.get("/testapp/widgets", headers=as_user("viewer_north")).json()["items"][0]
     assert listed["owner_name"] == "A. R."

@@ -236,6 +236,7 @@ export function CaseSheet({
                   masked={c.masked}
                 />
                 <Field label="Address" value={c.address} masked={c.masked} />
+                <Field label="City" value={c.city} />
                 <Field label="Country" value={c.country} />
                 <Field
                   label="Screening"

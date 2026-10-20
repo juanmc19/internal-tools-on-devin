@@ -12,7 +12,7 @@ masking:
     standard:
       owner_name: initials
       id_number: last4
-      address: city_only
+      address: redact
       born_on: day_only
 roles:
   viewer:

@@ -30,6 +30,7 @@ class Widget(Base):
     owner_name: Mapped[str] = mapped_column(String(120))
     id_number: Mapped[str] = mapped_column(String(32))
     address: Mapped[str] = mapped_column(String(200))
+    city: Mapped[str] = mapped_column(String(80))
     born_on: Mapped[str] = mapped_column(String(10))
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     status: Mapped[str] = mapped_column(String(32), default="requested")
@@ -54,6 +55,7 @@ def serialize(policy: Policy, user: User, widget: Widget) -> dict[str, Any]:
         "owner_name": widget.owner_name,
         "id_number": widget.id_number,
         "address": widget.address,
+        "city": widget.city,
         "born_on": widget.born_on,
         "amount": float(widget.amount),
         "status": widget.status,

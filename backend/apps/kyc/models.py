@@ -25,6 +25,7 @@ class Case(Base):
     date_of_birth: Mapped[str] = mapped_column(String(10))
     id_number: Mapped[str] = mapped_column(String(32))
     address: Mapped[str] = mapped_column(String(200))
+    city: Mapped[str] = mapped_column(String(80))
     country: Mapped[str] = mapped_column(String(2), index=True)
     risk: Mapped[str] = mapped_column(String(8), index=True)
     screening_result: Mapped[str] = mapped_column(String(16), index=True)

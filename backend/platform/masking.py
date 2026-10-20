@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from datetime import date, datetime
 
@@ -23,30 +22,10 @@ def last4(value: object) -> object:
     return f"{MASK}{text[-4:]}" if len(text) > 4 else MASK
 
 
-# Words that start a unit or building component ("Apt 4", "Depto B"), never a city.
-UNIT_WORDS = frozenset(
-    "apt apartment apto apartamento depto dpto departamento suite ste unit fl floor piso andar room rm "
-    "bldg building bloco casa sala oficina interior int po box lote".split()
-)
-# A city is words of letters joined by spaces, dots, hyphens or apostrophes ("São Paulo", "St. John's").
-CITY_PATTERN = re.compile(r"[^\W\d_]+(?:[ .'\-]+[^\W\d_]+)*\.?")
-
-
-def _looks_like_city(part: str) -> bool:
-    first_word = re.split(r"[ .'\-]", part, maxsplit=1)[0].lower()
-    return CITY_PATTERN.fullmatch(part) is not None and first_word not in UNIT_WORDS
-
-
-def city_only(value: object) -> object:
-    """Keeps the city, the last comma-separated component of an address ("12 Elm St, Austin" -> "Austin").
-
-    Fails closed: unless there is a separate last component that looks like a city (letters only, not a
-    unit such as "Apt 4"), the whole value is masked.
-    """
-    if value is None:
-        return None
-    parts = [p.strip() for p in str(value).split(",") if p.strip()]
-    return parts[-1] if len(parts) >= 2 and _looks_like_city(parts[-1]) else MASK
+def redact(value: object) -> object:
+    """Masks the whole value. For free text such as a street address, where no part is safe to guess at;
+    an app that needs the city stores it in its own field."""
+    return None if value is None else MASK
 
 
 def day_only(value: object) -> object:
@@ -67,7 +46,7 @@ def day_only(value: object) -> object:
 STRATEGIES: dict[str, Callable[[object], object]] = {
     "initials": initials,
     "last4": last4,
-    "city_only": city_only,
+    "redact": redact,
     "day_only": day_only,
 }
 

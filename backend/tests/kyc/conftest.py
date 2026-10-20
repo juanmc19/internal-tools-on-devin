@@ -70,6 +70,7 @@ def small_seed(session) -> None:
             date_of_birth=dob,
             id_number=idn,
             address=addr,
+            city=addr.rsplit(", ", 1)[-1],
             risk="low",
             screening_result="clear",
             status=status,
