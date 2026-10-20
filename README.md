@@ -86,6 +86,9 @@ docs/                 acceptance criteria, Devin session prompts, receipts
 - **Synthetic data only.** All records are generated, and SQLite stands in for a production database.
 - **Business details are illustrative:** six onboarding countries, four refund regions and the $5,000
   two-approver threshold.
+- **Reg E scope.** The prototype tracks only the 10-business-day Reg E investigation window from the customer's
+  report; it does not model the provisional-credit extension to 45 or 90 days or the customer's 60-day reporting
+  window.
 
 ## Run it
 
