@@ -3,7 +3,10 @@ export APP_ENV ?= dev
 UV := uv run --project backend
 NPM := npm --prefix web
 
-.PHONY: setup seed run web test e2e lint bench foundation-diff
+.PHONY: help setup seed run web test e2e lint bench foundation-diff
+
+help:             ## list every target
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/:[^#]*## /\t/' | awk -F'\t' '{printf "  %-17s %s\n", $$1, $$2}'
 
 setup:            ## install backend and frontend dependencies (+ Playwright Chromium)
 	uv sync --project backend
