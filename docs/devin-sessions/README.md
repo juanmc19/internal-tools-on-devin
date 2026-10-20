@@ -1,22 +1,21 @@
 # Devin sessions
 
-Three sessions, one prompt each. Each session ends in reviewed PRs and a row in `docs/RECEIPTS.md`.
+The prototype was built in three Devin sessions, one prompt each, followed by a security pass. Each prompt below
+is the one Devin was given; [RECEIPTS.md](../RECEIPTS.md) has the cost, time and review findings for each.
 
-| Session | Prompt | Builds | Target Devin time |
+| Session | Prompt | Result | Time |
 |---|---|---|---|
-| 1 | [session-1-foundation-kyc.md](session-1-foundation-kyc.md) | PR 1 foundation, PR 2 KYC Review Queue | ~65 min |
-| 2 | [session-2-refunds.md](session-2-refunds.md) | PR 3 Refunds Desk | ~30 min |
-| 3 | [session-3-reg-e-request.md](session-3-reg-e-request.md) | PR 4 Reg E deadlines | ~15 min |
+| 1 | [Foundation and KYC Review Queue](session-1-foundation-kyc.md) | [#1](https://github.com/juanmc19/internal-tools-on-devin/pull/1) foundation, [#2](https://github.com/juanmc19/internal-tools-on-devin/pull/2) KYC Review Queue | ~45 min |
+| 2 | [Refunds Desk](session-2-refunds.md) | [#3](https://github.com/juanmc19/internal-tools-on-devin/pull/3) Refunds Desk, no foundation changes | ~16 min |
+| 3 | [Reg E change request](session-3-reg-e-request.md) | [#4](https://github.com/juanmc19/internal-tools-on-devin/pull/4) Reg E deadlines, no foundation changes | ~11 min |
+| Security | Started from Devin's security scan, not a prompt file | [#9](https://github.com/juanmc19/internal-tools-on-devin/pull/9)–[#16](https://github.com/juanmc19/internal-tools-on-devin/pull/16), 9 findings fixed | |
 
-## Before session 1
+## How each session ran
 
-1. Push `AGENTS.md`, `REVIEW.md`, `README.md` and `docs/` to `main`.
-2. In Devin, connect the repo and turn on Devin Review for it.
-3. Raise the per-message usage limit to about $40 for the build sessions.
-4. Note the on-demand usage figure and the time. Do the same at the end of each session.
-
-## During each session
-
-- Approve or push back on Devin's plan before any code. One pushback round, then go.
-- Review each PR against `REVIEW.md`. Merge only with CI green and Devin Review findings handled.
-- Write down every intervention and every real bug that Devin or Devin Review missed.
+1. Devin read [AGENTS.md](../../AGENTS.md), [REVIEW.md](../../REVIEW.md) and [ACCEPTANCE.md](../ACCEPTANCE.md),
+   which every prompt names as part of the prompt.
+2. Devin proposed a plan, and the plan was approved before any code. Session 3's prompt asked Devin to build
+   without waiting, the way a routine change request would run.
+3. Devin built and tested in its own cloud machine (API, web app and Playwright browser tests), then opened PRs.
+4. Each PR was reviewed against REVIEW.md and merged with CI green. Interventions and bugs Devin missed are
+   recorded in RECEIPTS.md.

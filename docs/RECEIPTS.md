@@ -16,6 +16,28 @@ Devin spend is Devin's cost only; it doesn't include the engineer time spent rev
 reading the code against [REVIEW.md](../REVIEW.md). Sessions 2 and 3 were reviewed by running them: the tests, the
 live approval flows and refusals, and the Reg E deadline math checked by hand.
 
+## Security pass
+
+After the three sessions, Devin's security scan reviewed the whole repo. It reported 12 findings; triage merged
+2 duplicates and left 10 open: 3 high priority, 7 medium, none critical. Nine were fixed. The tenth, making the
+audit log tamper-evident against someone with direct database access (a keyed signature and an external
+checkpoint), was left for production along with real Entra ID sign-in. Devin split the fixes across 6 sessions
+running in parallel, one PR each, and Devin Review checked every PR.
+
+| PR | Fix | Devin Review finding |
+|---|---|---|
+| [#9](https://github.com/juanmc19/internal-tools-on-devin/pull/9) | Address masking fails closed when there is no city | A unit like `Apt 4` was still shown as the city |
+| [#10](https://github.com/juanmc19/internal-tools-on-devin/pull/10) | `X-Request-Id` is validated before it reaches audit rows | An alphanumeric id could still carry personal data |
+| [#11](https://github.com/juanmc19/internal-tools-on-devin/pull/11) | Approval and separation-of-duties rules fail closed on a mistyped field; the strictest count wins | None |
+| [#12](https://github.com/juanmc19/internal-tools-on-devin/pull/12) | `/health` and refusal logging no longer hold the SQLite write lock | None |
+| [#13](https://github.com/juanmc19/internal-tools-on-devin/pull/13) | Roles without `audit.read` get a trimmed workflow timeline | Histories had no page limit |
+| [#14](https://github.com/juanmc19/internal-tools-on-devin/pull/14) | Dev sign-in only from loopback; Reg E dates bounded and business days counted in constant time | The two-year cutoff was a day off across a leap year |
+| [#15](https://github.com/juanmc19/internal-tools-on-devin/pull/15) | Fixes for the four findings above | A named unit like `Rear` was still shown as the city |
+| [#16](https://github.com/juanmc19/internal-tools-on-devin/pull/16) | The city is stored in its own field and the street address is fully masked | None |
+
+PRs #9 to #15 were merged before Devin Review finished, so each finding landed on `main` and was fixed in the
+next PR; #16 was merged after a clean review. Most fixes are in the foundation, each in its own `platform:` commit.
+
 ## Bugs Devin missed
 
 - **Audit-chain race under concurrent writes (PR #1).** `audit.last_hash()` ran before SQLite took the write
